@@ -15,7 +15,7 @@ Idea is that [https://github.com/2xic-speedrun/latios](https://github.com/2xic-s
     - num of centroids
     - ....
   - Data header
-    - How to store this efficevly ? 
+    - How to store this efficiently ? 
       - Linked list ? 
     - 
 - K-means indexer
@@ -30,6 +30,6 @@ Idea is that [https://github.com/2xic-speedrun/latios](https://github.com/2xic-s
 - Save the vector to database
 
 `db.query(vec, n=5)`
-- Gives you n (5) most similiar vectors in db.
+- Gives you n (5) most similar vectors in db.
 
 
