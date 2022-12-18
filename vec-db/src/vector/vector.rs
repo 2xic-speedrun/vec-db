@@ -10,7 +10,17 @@ impl Vector {
         };
     }
 
-    pub fn l2_distance(&self, other: Vector) -> Option<f64> {
+    pub fn Copy(mut self) -> Vector {
+        let mut cloned_vec: Vec<f64> = Vec::new();
+        for i in self.vector.iter_mut(){
+            cloned_vec.push(*i);
+        }
+        return Vector{
+            vector: self.vector.clone(),
+        }
+    }
+
+    pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
         if self.len() != other.len() {
             return None;
         }
@@ -45,12 +55,43 @@ impl Vector {
         });
     }
 
+    pub fn add(&self, other: &Vector) -> Option<Vector> {
+        if self.len() != other.len() {
+            return None;
+        }
+
+        let mut vec = self.vector.clone();
+
+        for i in 0..self.len() {
+            let other_value = other.get(i);
+            if let Some(other_value) = other_value{
+                vec[i] = vec[i] + other_value;
+            }
+        }
+
+        return Some(Vector {
+            vector: vec,
+        });
+    }
+
+    pub fn mul_constant(&self, constant: f64) -> Vector {
+        let mut vec = self.vector.clone();
+
+        for i in 0..self.len() {
+            vec[i] = vec[i] * constant;
+        }
+
+        return Vector {
+            vector: vec,
+        };
+    }
+
     pub fn equal(&self, other: Vector) -> bool {
         if self.len() != other.len() {
             return false;
         }
 
-        let mut vec = self.vector.clone();
+        let vec = self.vector.clone();
         for i in 0..self.len() {
             let other_value = other.get(i);
             if let Some(other_value) = other_value{
@@ -73,6 +114,17 @@ impl Vector {
 
     pub fn len(&self) -> usize {
         return self.vector.len();
+    }
+
+    pub fn println(&self) {
+//        println!("We out here");
+        for (index, i) in self.vector.iter().enumerate() {
+            if index > 0 {
+                print!(", ");
+            }
+            print!("{}", i);
+        }
+        print!("\n");
     }
 }
 
