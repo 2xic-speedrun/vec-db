@@ -2,7 +2,7 @@
 
 Just for fun, and not for production!
 
-Idea is that [https://github.com/2xic-speedrun/latios](https://github.com/2xic-speedrun/latios) might use this as a way to quickly cluster.
+Idea is that [https://github.com/2xic-speedrun/latios](https://github.com/2xic-speedrun/latios) might use this as a way to quickly find similar latent embeddings.
 
 ### TODO
 - Filesystem format
@@ -30,6 +30,4 @@ Idea is that [https://github.com/2xic-speedrun/latios](https://github.com/2xic-s
 - Save the vector to database
 
 `db.query(vec, n=5)`
-- Gives you n (5) most similar vectors in db.
-
-
+- Gives you n (5) most similar vectors to the query vector in the database 
