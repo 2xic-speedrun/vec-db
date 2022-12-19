@@ -1,5 +1,6 @@
 pub mod vector;
 pub mod kmeans;
+pub mod fileformat;
 
 #[cfg(test)]
 mod tests {
@@ -84,5 +85,45 @@ mod tests {
         let centroids = kmeans.centroids();
         assert_eq!(centroids[0].equal(base_centroid.mul_constant(-3.0)), false);
         assert_eq!(centroids[1].equal(base_centroid.mul_constant(5.0)), false);
+    }
+
+
+    #[test]
+    fn it_should_have_a_functionally_file_format() {
+        use crate::fileformat::fileformat::FileFormat;
+        use std::fs::File;
+        use std::io::prelude::*;
+        use std::io::Cursor;
+        use crate::vector::vector::Vector;
+        
+        // Fake file!
+        let mut buff: Cursor<Vec<u8>> = Cursor::new(vec![]);
+        
+        let mut file_format = FileFormat::new(&mut buff);
+
+
+        let mut centroid_a:Vec<f64> = Vec::new();
+        centroid_a.push(1.0);
+        centroid_a.push(1.0);
+        centroid_a.push(1.0);
+
+        let mut vec_a = Vector::new(centroid_a);
+
+        file_format.add_centroid(vec_a);
+        
+        assert_eq!(file_format.get_dimensions(), 3);
+        assert_eq!(file_format.get_centroids(), 1);
+
+        let mut centroid_a:Vec<f64> = Vec::new();
+        centroid_a.push(1.0);
+        centroid_a.push(1.0);
+        centroid_a.push(1.0);
+        let mut vec_b = Vector::new(centroid_a);
+
+        file_format.add_centroid(vec_b);
+        assert_eq!(file_format.get_dimensions(), 3);
+        assert_eq!(file_format.get_centroids(), 2);
+
+        assert_eq!(file_format.len(), 2);
     }
 }
