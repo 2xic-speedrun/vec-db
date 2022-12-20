@@ -10,16 +10,6 @@ impl Vector {
         };
     }
 
-    pub fn Copy(mut self) -> Vector {
-        let mut cloned_vec: Vec<f64> = Vec::new();
-        for i in self.vector.iter_mut(){
-            cloned_vec.push(*i);
-        }
-        return Vector{
-            vector: self.vector.clone(),
-        }
-    }
-
     pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
         if self.len() != other.len() {
             return None;

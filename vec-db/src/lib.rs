@@ -73,7 +73,7 @@ mod tests {
         centroid_a.push(1.0);
         centroid_a.push(1.0);
 
-        let mut base_centroid = Vector::new(centroid_a);
+        let base_centroid = Vector::new(centroid_a);
         /*
             TODO: Clean the reference borrowing here
         */
@@ -87,7 +87,6 @@ mod tests {
         assert_eq!(centroids[1].equal(base_centroid.mul_constant(5.0)), false);
     }
 
-
     #[test]
     fn it_should_have_a_functionally_file_format() {
         use crate::fileformat::fileformat::FileFormat;
@@ -99,7 +98,9 @@ mod tests {
         // Fake file!
         let mut buff: Cursor<Vec<u8>> = Cursor::new(vec![]);
         
-        let mut file_format = FileFormat::new(&mut buff);
+        let mut file_format = FileFormat::new(
+            &mut buff
+        );
 
 
         let mut centroid_a:Vec<f64> = Vec::new();
@@ -107,9 +108,9 @@ mod tests {
         centroid_a.push(1.0);
         centroid_a.push(1.0);
 
-        let mut vec_a = Vector::new(centroid_a);
+        let vec_a = Vector::new(centroid_a);
 
-        file_format.add_centroid(vec_a);
+        file_format.add_vector(&vec_a);
         
         assert_eq!(file_format.get_dimensions(), 3);
         assert_eq!(file_format.get_centroids(), 1);
@@ -118,12 +119,64 @@ mod tests {
         centroid_a.push(1.0);
         centroid_a.push(1.0);
         centroid_a.push(1.0);
-        let mut vec_b = Vector::new(centroid_a);
+        let vec_b = Vector::new(centroid_a);
 
-        file_format.add_centroid(vec_b);
+        file_format.add_vector(&vec_b);
         assert_eq!(file_format.get_dimensions(), 3);
         assert_eq!(file_format.get_centroids(), 2);
 
-        assert_eq!(file_format.len(), 2);
+        let first_vector = file_format.read_vector(0);
+        assert_eq!(first_vector.len(), 3);
+
+        let second_vector = file_format.read_vector(1);
+        assert_eq!(first_vector.equal(second_vector), false);
+    }
+
+
+    #[test]
+    fn it_should_be_able_to_find_closest_vectors_from_centroids_in_db() {
+        use crate::fileformat::fileformat::FileFormat;
+        use crate::fileformat::database::Database;
+        use std::fs::File;
+        use std::io::prelude::*;
+        use std::io::Cursor;
+        use crate::vector::vector::Vector;
+        
+        let mut buff: Cursor<Vec<u8>> = Cursor::new(vec![]);        
+        let mut file_format = FileFormat::new(
+            &mut buff
+        );
+        let mut centroid_a:Vec<f64> = Vec::new();
+        centroid_a.push(1.0);
+        centroid_a.push(1.0);
+        centroid_a.push(1.0);
+        let vec_a = Vector::new(centroid_a);
+        file_format.add_vector(&vec_a);
+
+
+        let mut centroid_b:Vec<f64> = Vec::new();
+        centroid_b.push(42.0);
+        centroid_b.push(42.0);
+        centroid_b.push(42.0);
+        let vec_b = Vector::new(centroid_b);
+        file_format.add_vector(&vec_b);
+
+        let mut vectors: Vec<&mut FileFormat> = Vec::new();
+        let mut vector_buff: Cursor<Vec<u8>> = Cursor::new(vec![]);        
+        let mut vector_format = FileFormat::new(
+            &mut vector_buff
+        );
+        file_format.add_vector(&vec_b);
+
+        vectors.push(&mut vector_format);
+
+
+        let mut database = Database::new(
+            &mut file_format,
+            vectors
+        );
+
+        let results = database.query(&vec_b);
+        assert_eq!(results.len(), 1);
     }
 }

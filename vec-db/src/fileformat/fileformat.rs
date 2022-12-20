@@ -1,5 +1,6 @@
 use std::io::prelude::*;
 use std::io::Cursor;
+use std::mem::size_of;
 /**
  * 
  * Header section
@@ -19,6 +20,12 @@ use std::io::Cursor;
  *  filesystem layouts
  */
 
+ /**
+  * So I think in the first version we make a super simple version
+    - Centroids are stored in a single file (parent file)
+    - Vectors connected to a centroids stored in seperate files (child files)
+  */
+
  use crate::vector::vector::Vector;
 
 pub struct FileFormat<'a> {
@@ -26,9 +33,11 @@ pub struct FileFormat<'a> {
     writer:&'a mut Cursor<Vec<u8>>,
 }
 
+const VECTOR_LEN: usize = 3;
+
 impl FileFormat<'_> {
     pub fn new(
-        writer: &mut Cursor<Vec<u8>>
+        writer: &mut Cursor<Vec<u8>>,
     ) -> FileFormat {
         return FileFormat {
             writer: writer,
@@ -53,14 +62,8 @@ impl FileFormat<'_> {
         return buffer[0];
     }
 
-    pub fn write_header(&mut self, centroid: Vector) {
-        // let len = self.writer.len();
+    pub fn create_or_update_header(&mut self, centroid: &Vector) {
         if self.writer.get_ref().len() == 0 {
-            /*
-            Header format
-            - Centroid count
-            - Centroid dim (vector dim)
-            */
             self.writer.write(&[(centroid.len() as u8)]);
             self.writer.write(&[(1)]);
         } else {
@@ -70,17 +73,39 @@ impl FileFormat<'_> {
         }
     }
 
-    pub fn add_centroid(&mut self, vector: Vector){
-        self.write_header(vector);
-        // Write random data.
-        /*
-        for i in 0..10 {
-            self.writer.write(&[i]);
-        }*/
+    pub fn add_vector(&mut self, vector: &Vector){
+        assert_eq!(vector.len(), VECTOR_LEN);
+        self.create_or_update_header(&vector);
+        // TODO: Should probably also 
+        let size = vector.len();
+        for i in 0..size {
+            let value = vector.get(i).unwrap();
+            let byte_value = value.to_be_bytes();
+            for b in byte_value{
+                self.writer.write(&[
+                    b
+                ]).unwrap();
+            }
+        }
+    }
+
+    pub fn read_vector(&mut self, index: usize) -> Vector{
+        const BYTE_SIZE: usize = size_of::<f64>();
+        let forward: u64 = ((BYTE_SIZE * VECTOR_LEN) * index ) as u64;
+        println!("{}", forward);
+        self.writer.seek(std::io::SeekFrom::Start(1 + forward));
+
+        let mut vector:Vec<f64> = Vec::new();
+        for i in 0..VECTOR_LEN {
+            let mut buffer = [0; (BYTE_SIZE)];
+            // Does this also seek ?
+            self.writer.read_exact(&mut buffer);
+            vector.push(f64::from_be_bytes(buffer));
+        }
+        return Vector::new(vector);
     }
 
     pub fn len(&mut self) -> usize{
         return self.writer.get_ref().len();
     }
 }
-
