@@ -6,14 +6,16 @@ pub struct Kmeans {
     centroids: Vec<Vector>,
     dataset: Vec<Vector>,
     centroids_count: usize,
+    length: usize
 }
 
 impl Kmeans  {
-    pub fn new(centroids_count: usize) -> Kmeans {
+    pub fn new(centroids_count: usize, length: usize) -> Kmeans {
         return Kmeans{
             dataset: Vec::new(),
             centroids: Vec::new(),
             centroids_count: centroids_count,
+            length: length,
         }
     }
 
@@ -28,8 +30,8 @@ impl Kmeans  {
         self.dataset.push(vector);
     }
 
-    pub fn centroids(self) -> Vec<Vector> {
-        return self.centroids;
+    pub fn centroids(&self) -> &Vec<Vector> {
+        return &self.centroids;
     }
 
     pub fn fit(&mut self, iterations: i64) {
@@ -73,24 +75,23 @@ impl Kmeans  {
         }
 
         for (key, vectors) in clustered_data_pints.into_iter() {
-            let len = vectors.len();
+            let clustered_len = vectors.len();
             // TODO: Should be possible to initialize a zero vector based on another vec
             let mut zero_vec = Vec::new();
-            zero_vec.push(0.0);
-            zero_vec.push(0.0);
-
-            let mut delta_vector: Vector = Vector::new(zero_vec);
-            for vector in vectors {
-                delta_vector = delta_vector.add(vector).unwrap();
+            for _ in 0..self.length {
+                zero_vec.push(0.0);
             }
-
-            // delta_vector.println();
-            delta_vector.mul_constant((1/len) as f64);
-
-            self.centroids[key] = self.centroids[key].add(&delta_vector).unwrap();
+            
+            if 0 < clustered_len {
+                let mut delta_vector: Vector = Vector::new(zero_vec);
+                for vector in vectors {
+                    delta_vector = delta_vector.add(vector).unwrap();
+                }
+    
+                delta_vector = delta_vector.mul_constant((1.0/(clustered_len as f64)));
+        
+                self.centroids[key] = delta_vector;
+            }
         }
-        println!("");
     }
 }
-
-

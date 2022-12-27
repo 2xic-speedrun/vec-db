@@ -1,3 +1,4 @@
+use std::fmt;
 
 pub struct Vector {
     vector: Vec<f64>,
@@ -106,6 +107,10 @@ impl Vector {
         return self.vector.len();
     }
 
+    pub fn raw(&self) -> &Vec<f64> {
+        return &self.vector;
+    }
+
     pub fn println(&self) {
 //        println!("We out here");
         for (index, i) in self.vector.iter().enumerate() {
@@ -115,6 +120,19 @@ impl Vector {
             print!("{}", i);
         }
         print!("\n");
+    }
+}
+
+impl fmt::Display for Vector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[");
+        for (index, i) in self.vector.iter().enumerate() {
+            if index > 0 {
+                write!(f, ", ");
+            }
+            write!(f, "{}", i);
+        }
+        write!(f, "]")
     }
 }
 

@@ -1,6 +1,7 @@
 pub mod vector;
 pub mod kmeans;
 pub mod fileformat;
+pub mod bindings;
 
 #[cfg(test)]
 mod tests {
@@ -63,7 +64,7 @@ mod tests {
         vec_a.push(1.0);
         let a = Vector::new(vec_a);
 
-        let mut kmeans = Kmeans::new(3);
+        let mut kmeans = Kmeans::new(3, 2);
         kmeans.add(a.mul_constant(-500.0));
         kmeans.add(a.mul_constant(-440.0));
 
@@ -180,3 +181,16 @@ mod tests {
         assert_eq!(results.len(), 1);
     }
 }
+
+use pyo3::prelude::*;
+
+#[pymodule]
+fn libvec_db(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    use crate::bindings::python::PyVector;
+    use crate::bindings::python::PyKmeans;
+
+    m.add_class::<PyVector>()?;
+    m.add_class::<PyKmeans>()?;
+    Ok(())
+}
+
