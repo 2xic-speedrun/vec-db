@@ -26,21 +26,25 @@ use std::mem::size_of;
     - Vectors connected to a centroids stored in seperate files (child files)
   */
 
- use crate::vector::vector::Vector;
+use crate::vector::vector::Vector;
+use std::io::SeekFrom;
 
-pub struct FileFormat<'a> {
+pub struct FileFormat<'a, W> {
     // n vector szie ? 
-    writer:&'a mut Cursor<Vec<u8>>,
+    writer:&'a mut W,
+    VECTOR_LEN: usize,
 }
 
-const VECTOR_LEN: usize = 3;
+//const VECTOR_LEN: usize = 3;
 
-impl FileFormat<'_> {
+impl<W:Write + Read+ Seek> FileFormat<'_, W> {
     pub fn new(
-        writer: &mut Cursor<Vec<u8>>,
-    ) -> FileFormat {
+        writer: &mut W,
+        VECTOR_LEN: usize
+    ) -> FileFormat<W> {
         return FileFormat {
             writer: writer,
+            VECTOR_LEN: VECTOR_LEN,
         };
     }
 
@@ -63,7 +67,7 @@ impl FileFormat<'_> {
     }
 
     pub fn create_or_update_header(&mut self, centroid: &Vector) {
-        if self.writer.get_ref().len() == 0 {
+       if self.len() == 0 {
             self.writer.write(&[(centroid.len() as u8)]);
             self.writer.write(&[(1)]);
         } else {
@@ -74,9 +78,10 @@ impl FileFormat<'_> {
     }
 
     pub fn add_vector(&mut self, vector: &Vector){
-        assert_eq!(vector.len(), VECTOR_LEN);
+        assert_eq!(vector.len(), self.VECTOR_LEN);
         self.create_or_update_header(&vector);
         // TODO: Should probably also 
+        self.len();
         let size = vector.len();
         for i in 0..size {
             let value = vector.get(i).unwrap();
@@ -91,12 +96,12 @@ impl FileFormat<'_> {
 
     pub fn read_vector(&mut self, index: usize) -> Vector{
         const BYTE_SIZE: usize = size_of::<f64>();
-        let forward: u64 = ((BYTE_SIZE * VECTOR_LEN) * index ) as u64;
-        println!("{}", forward);
+        let forward: u64 = ((BYTE_SIZE * self.VECTOR_LEN) * index ) as u64;
+      //  println!("{}", forward);
         self.writer.seek(std::io::SeekFrom::Start(1 + forward));
 
         let mut vector:Vec<f64> = Vec::new();
-        for i in 0..VECTOR_LEN {
+        for i in 0..self.VECTOR_LEN {
             let mut buffer = [0; (BYTE_SIZE)];
             // Does this also seek ?
             self.writer.read_exact(&mut buffer);
@@ -105,7 +110,9 @@ impl FileFormat<'_> {
         return Vector::new(vector);
     }
 
-    pub fn len(&mut self) -> usize{
-        return self.writer.get_ref().len();
+    pub fn len(&mut self) -> u64 {
+        let size = self.writer.seek(SeekFrom::End(0));
+        return size.unwrap();
+//        return self.writer.get_ref().len();
     }
 }

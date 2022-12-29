@@ -1,22 +1,29 @@
 use crate::fileformat::fileformat::FileFormat;
 use crate::vector::vector::Vector;
+use std::io::prelude::*;
 
-pub struct Database<'a> {
-    centroids: &'a mut FileFormat<'a>,
-    vectors: Vec<&'a mut FileFormat<'a>>
+pub struct Database<'a, W> {
+    centroids: &'a mut FileFormat<'a, W>,
+    vectors: Vec<&'a mut FileFormat<'a, W>>
 }
 
-impl Database<'_> {
+impl<W:Write + Read+ Seek> Database<'_, W> {
     pub fn new<'a>(
-        centroids: &'a mut FileFormat<'a>,
-        vectors: Vec<&'a mut FileFormat<'a>>
-    ) -> Database<'a> {
+        centroids: &'a mut FileFormat<'a, W>,
+        vectors: Vec<&'a mut FileFormat<'a, W>>
+    ) -> Database<'a, W> {
         return Database {
             centroids: centroids,
             vectors: vectors,
         };
     }
 
+    /**
+     * TODO:
+     * Maybe it's easier for this class just to return the index, 
+     * and have higher level logic deal with loading the vectors into memory.
+     * 
+     */
     pub fn query(
         &mut self,
         query: &Vector

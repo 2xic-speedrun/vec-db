@@ -13,6 +13,7 @@ impl Vector {
 
     pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
         if self.len() != other.len() {
+            panic!("Wrong size");
             return None;
         }
 
@@ -29,6 +30,7 @@ impl Vector {
 
     pub fn subtract(&self, other: Vector) -> Option<Vector> {
         if self.len() != other.len() {
+            panic!("Wrong size");
             return None;
         }
 
@@ -48,6 +50,7 @@ impl Vector {
 
     pub fn add(&self, other: &Vector) -> Option<Vector> {
         if self.len() != other.len() {
+            panic!("Wrong size");
             return None;
         }
 

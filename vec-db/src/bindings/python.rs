@@ -26,10 +26,10 @@ pub struct PyKmeans {
 #[pymethods]
 impl PyKmeans {
     #[new]
-    fn new(centroid_count: usize, shape: usize) -> PyKmeans {
+    fn new(shape: usize) -> PyKmeans {
 
         return PyKmeans {
-            kmeans: Kmeans::new(centroid_count, shape),
+            kmeans: Kmeans::new(shape),
         }
     }
 

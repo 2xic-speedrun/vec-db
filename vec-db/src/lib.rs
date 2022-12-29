@@ -64,7 +64,7 @@ mod tests {
         vec_a.push(1.0);
         let a = Vector::new(vec_a);
 
-        let mut kmeans = Kmeans::new(3, 2);
+        let mut kmeans = Kmeans::new(2);
         kmeans.add(a.mul_constant(-500.0));
         kmeans.add(a.mul_constant(-440.0));
 
@@ -100,7 +100,8 @@ mod tests {
         let mut buff: Cursor<Vec<u8>> = Cursor::new(vec![]);
         
         let mut file_format = FileFormat::new(
-            &mut buff
+            &mut buff,
+            3
         );
 
 
@@ -145,7 +146,8 @@ mod tests {
         
         let mut buff: Cursor<Vec<u8>> = Cursor::new(vec![]);        
         let mut file_format = FileFormat::new(
-            &mut buff
+            &mut buff,
+            3
         );
         let mut centroid_a:Vec<f64> = Vec::new();
         centroid_a.push(1.0);
@@ -162,10 +164,11 @@ mod tests {
         let vec_b = Vector::new(centroid_b);
         file_format.add_vector(&vec_b);
 
-        let mut vectors: Vec<&mut FileFormat> = Vec::new();
+        let mut vectors: Vec<&mut FileFormat<Cursor<Vec<u8>>>> = Vec::new();
         let mut vector_buff: Cursor<Vec<u8>> = Cursor::new(vec![]);        
         let mut vector_format = FileFormat::new(
-            &mut vector_buff
+            &mut vector_buff,
+            3
         );
         file_format.add_vector(&vec_b);
 
@@ -188,9 +191,10 @@ use pyo3::prelude::*;
 fn libvec_db(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     use crate::bindings::python::PyVector;
     use crate::bindings::python::PyKmeans;
+    use crate::bindings::database::PyDatabase;
 
     m.add_class::<PyVector>()?;
     m.add_class::<PyKmeans>()?;
+    m.add_class::<PyDatabase>()?;
     Ok(())
 }
-
