@@ -1,5 +1,4 @@
 use std::io::prelude::*;
-use std::io::Cursor;
 use std::mem::size_of;
 /**
  * 
@@ -32,7 +31,7 @@ use std::io::SeekFrom;
 pub struct FileFormat<'a, W> {
     // n vector szie ? 
     writer:&'a mut W,
-    VECTOR_LEN: usize,
+    vector_len: usize,
 }
 
 //const VECTOR_LEN: usize = 3;
@@ -40,11 +39,11 @@ pub struct FileFormat<'a, W> {
 impl<W:Write + Read+ Seek> FileFormat<'_, W> {
     pub fn new(
         writer: &mut W,
-        VECTOR_LEN: usize
+        vector_len: usize
     ) -> FileFormat<W> {
         return FileFormat {
             writer: writer,
-            VECTOR_LEN: VECTOR_LEN,
+            vector_len,
         };
     }
 
@@ -53,34 +52,33 @@ impl<W:Write + Read+ Seek> FileFormat<'_, W> {
     }
 
     pub fn get_dimensions(&mut self) -> u8{
-        self.writer.seek(std::io::SeekFrom::Start(0));
+        let _ = self.writer.seek(std::io::SeekFrom::Start(0));
         let mut buffer = [0; 1];
-        self.writer.read_exact(&mut buffer);
+        let _ = self.writer.read_exact(&mut buffer);
         return buffer[0];
     }
 
     pub fn get_centroids(&mut self) -> u8{
-        self.writer.seek(std::io::SeekFrom::Start(1));
+        let _ = self.writer.seek(std::io::SeekFrom::Start(1));
         let mut buffer = [0; 1];
-        self.writer.read_exact(&mut buffer);
+        let _ = self.writer.read_exact(&mut buffer);
         return buffer[0];
     }
 
     pub fn create_or_update_header(&mut self, centroid: &Vector) {
        if self.len() == 0 {
-            self.writer.write(&[(centroid.len() as u8)]);
-            self.writer.write(&[(1)]);
+            let _ = self.writer.write(&[(centroid.len() as u8)]);
+            let _ = self.writer.write(&[(1)]);
         } else {
             let centroids = self.get_centroids() + 1;
-            self.writer.seek(std::io::SeekFrom::Start(1));
-            self.writer.write(&[centroids]);
+            let _ = self.writer.seek(std::io::SeekFrom::Start(1));
+            let _ = self.writer.write(&[centroids]);
         }
     }
 
     pub fn add_vector(&mut self, vector: &Vector){
-        assert_eq!(vector.len(), self.VECTOR_LEN);
+        assert_eq!(vector.len(), self.vector_len);
         self.create_or_update_header(&vector);
-        // TODO: Should probably also 
         self.len();
         let size = vector.len();
         for i in 0..size {
@@ -96,15 +94,14 @@ impl<W:Write + Read+ Seek> FileFormat<'_, W> {
 
     pub fn read_vector(&mut self, index: usize) -> Vector{
         const BYTE_SIZE: usize = size_of::<f64>();
-        let forward: u64 = ((BYTE_SIZE * self.VECTOR_LEN) * index ) as u64;
-      //  println!("{}", forward);
-        self.writer.seek(std::io::SeekFrom::Start(1 + forward));
+        let forward: u64 = ((BYTE_SIZE * self.vector_len) * index ) as u64;
+        let _ = self.writer.seek(std::io::SeekFrom::Start(1 + forward));
 
         let mut vector:Vec<f64> = Vec::new();
-        for i in 0..self.VECTOR_LEN {
+        for _ in 0..self.vector_len {
             let mut buffer = [0; (BYTE_SIZE)];
             // Does this also seek ?
-            self.writer.read_exact(&mut buffer);
+            let _ = self.writer.read_exact(&mut buffer);
             vector.push(f64::from_be_bytes(buffer));
         }
         return Vector::new(vector);
@@ -113,6 +110,5 @@ impl<W:Write + Read+ Seek> FileFormat<'_, W> {
     pub fn len(&mut self) -> u64 {
         let size = self.writer.seek(SeekFrom::End(0));
         return size.unwrap();
-//        return self.writer.get_ref().len();
     }
 }

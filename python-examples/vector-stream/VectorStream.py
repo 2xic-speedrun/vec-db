@@ -1,8 +1,8 @@
 from libvec_db import PyDatabase
 from sklearn import datasets
 
-n_features = 100
 # We have many samples, and will stream them over time!
+n_features = 100
 n_samples = 10#_000
 classes = 10
 
@@ -17,8 +17,15 @@ classes = 10
 )
 
 database = PyDatabase()
-database.load()
 
+# Insert all the entries
 for i in X:
-    database.save(i)
+    database.insert(i)
+
+# Store the entries
 database.dump()
+
+# Now we want to do a lookup. 
+database = PyDatabase()
+database.load()
+print(database.query(X[0]))

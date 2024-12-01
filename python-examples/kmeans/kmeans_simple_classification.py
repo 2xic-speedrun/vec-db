@@ -1,7 +1,4 @@
 from libvec_db import PyKmeans
-from sklearn import datasets
-from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
 import numpy as np
 from helper import plot
 
@@ -26,7 +23,7 @@ def get_centroid():
 
 classes = 2
 n_features = 2
-kmeans = PyKmeans(classes, n_features)
+kmeans = PyKmeans(n_features)
 n_samples = 1_00
 
 

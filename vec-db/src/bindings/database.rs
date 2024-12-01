@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
 use crate::vector::vector::Vector;
-use crate::kmeans::kmeans::Kmeans;
 use crate::fileformat::simple_database::SimpleDatabase;
 
 
@@ -18,8 +17,12 @@ impl PyDatabase {
         }
     }
 
-    fn save(&mut self, vec: Vec<f64>) {
-        self.database.save(Vector::new(vec));
+    fn insert(&mut self, vec: Vec<f64>) {
+        self.database.insert(Vector::new(vec));
+    }
+
+    fn query(&mut self, vec: Vec<f64>) -> Vec<Vec<f64>> {
+        self.database.query(Vector::new(vec))
     }
 
     fn load(&mut self) {

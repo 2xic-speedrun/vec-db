@@ -5,25 +5,22 @@ use std::collections::HashMap;
 pub struct Kmeans {
     centroids: Vec<Vector>,
     dataset: Vec<Vector>,
-  //  centroids_count: usize,
     vector_length: usize
 }
 
 impl Kmeans  {
-    pub fn new(/*centroids_count: usize, */ vector_length: usize) -> Kmeans {
+    pub fn new(vector_length: usize) -> Kmeans {
         return Kmeans{
             dataset: Vec::new(),
             centroids: Vec::new(),
-       //     centroids_count: centroids_count,
             vector_length: vector_length,
         }
     }
 
     // TODO: Replace this method with some rand method available on vector
+    // TODO: Need this to change depending on how many items are in the database
     pub fn add_centroid(&mut self, vector: Vector){
-//        if self.centroids.len() < self.centroids_count {
-            self.centroids.push(vector);
-//        }
+        self.centroids.push(vector);
     }
 
     pub fn add(&mut self, vector: Vector) {
@@ -32,6 +29,10 @@ impl Kmeans  {
 
     pub fn centroids(&self) -> &Vec<Vector> {
         return &self.centroids;
+    }
+
+    pub fn dataset(&self) -> &Vec<Vector> {
+        return &self.dataset;
     }
 
     pub fn fit(&mut self, iterations: i64) {
@@ -44,13 +45,11 @@ impl Kmeans  {
         let mut results: Vec<(&Vector, i8)> = Vec::new();
         for i in self.dataset.iter() {
             results.push((i, (self.find_closest_centroid(i)) as i8));
-//            results.push((i, 1));
         }
         return results;
     }
 
     fn find_closest_centroid(&self, data_point: &Vector) -> usize {
-         //   let mut best_centroid: Option<&Vector> = None;
          let mut best_score = INFINITY;
          let mut best_index: usize = 0;
          for (index, centroid) in self.centroids.iter().enumerate() {
@@ -65,10 +64,52 @@ impl Kmeans  {
          return best_index;
     }
 
+    pub fn find_closest_data_points(&self, data_point: &Vector) -> Vec<Vec<f64>> {
+        let mut results:Vec<Vec<f64>> = Vec::new();
+
+        let clustered_data_pints = self.get_centroids_data_point().clone();
+        let centroid = self.find_closest_centroid(data_point).clone();
+
+        for index in 0..10 {
+            if index < clustered_data_pints.clone()[&centroid.clone()].len() {
+                let vecdd = clustered_data_pints.clone()[&centroid.clone()][index];
+                results.push(vecdd.raw().clone());
+            }
+        }
+
+        return results;
+    }
+
     fn forward(&mut self) {
         // TODO: How does one efficiently set a centroid location ?
         //      Currently we make the user do it
+        let clustered_data_pints = self.get_centroids_data_point().clone();
+        let mut new_centorids = Vec::with_capacity(self.centroids.len() + 1);
+        for _ in 0..self.centroids.len(){
+            new_centorids.push(Vector::new(self.get_zero_vec().clone()));
+        }
 
+        for (key, vectors) in clustered_data_pints.clone().into_iter() {
+            let clustered_len = vectors.len();
+            // TODO: Should be possible to initialize a zero vector based on another vec
+            let zero_vec = self.get_zero_vec().clone();
+            if 0 < clustered_len {
+                let mut delta_vector: Vector = Vector::new(zero_vec);
+                for vector in vectors {
+                    delta_vector = delta_vector.add(vector).unwrap();
+                }
+    
+                delta_vector = delta_vector.mul_constant(1.0/(clustered_len as f64));
+
+                new_centorids[key] = delta_vector;
+            }
+        }
+
+
+        self.centroids = new_centorids;
+    }
+
+    fn get_centroids_data_point(&self) ->  HashMap<usize, Vec<&Vector>> {
         let mut clustered_data_pints:HashMap<usize, Vec<&Vector>> = HashMap::new();
 
         for data_point in self.dataset.iter() {
@@ -90,21 +131,7 @@ impl Kmeans  {
             };
         }
 
-        for (key, vectors) in clustered_data_pints.into_iter() {
-            let clustered_len = vectors.len();
-            // TODO: Should be possible to initialize a zero vector based on another vec
-            let zero_vec = self.get_zero_vec();
-            if 0 < clustered_len {
-                let mut delta_vector: Vector = Vector::new(zero_vec);
-                for vector in vectors {
-                    delta_vector = delta_vector.add(vector).unwrap();
-                }
-    
-                delta_vector = delta_vector.mul_constant((1.0/(clustered_len as f64)));
-        
-                self.centroids[key] = delta_vector;
-            }
-        }
+        return clustered_data_pints;
     }
 
     pub fn get_zero_vec(&self) -> Vec<f64> {
@@ -112,6 +139,6 @@ impl Kmeans  {
         for _ in 0..self.vector_length {
             zero_vec.push(0.0);
         }
-        return zero_vec;
+        zero_vec
     }
 }

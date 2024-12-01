@@ -1,5 +1,6 @@
 use std::fmt;
 
+#[derive(Clone)]
 pub struct Vector {
     vector: Vec<f64>,
 }
@@ -14,7 +15,6 @@ impl Vector {
     pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
         if self.len() != other.len() {
             panic!("Wrong size");
-            return None;
         }
 
         let mut distance: f64 = 0.0;
@@ -31,7 +31,6 @@ impl Vector {
     pub fn subtract(&self, other: Vector) -> Option<Vector> {
         if self.len() != other.len() {
             panic!("Wrong size");
-            return None;
         }
 
         let mut vec = self.vector.clone();
@@ -51,7 +50,6 @@ impl Vector {
     pub fn add(&self, other: &Vector) -> Option<Vector> {
         if self.len() != other.len() {
             panic!("Wrong size");
-            return None;
         }
 
         let mut vec = self.vector.clone();
@@ -128,12 +126,12 @@ impl Vector {
 
 impl fmt::Display for Vector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[");
+        let _ = write!(f, "[");
         for (index, i) in self.vector.iter().enumerate() {
             if index > 0 {
-                write!(f, ", ");
+                let _ = write!(f, ", ");
             }
-            write!(f, "{}", i);
+            let _ = write!(f, "{}", i);
         }
         write!(f, "]")
     }

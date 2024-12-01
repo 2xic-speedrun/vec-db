@@ -1,13 +1,10 @@
 from libvec_db import PyKmeans
 from sklearn import datasets
-from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
-import numpy as np
 from helper import plot
 
 classes = 2
 n_features = 10
-kmeans = PyKmeans(classes, n_features)
+kmeans = PyKmeans(n_features)
 n_samples = 1_00
 
 

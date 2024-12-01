@@ -1,3 +1,9 @@
+# Simple vector database
+
+
+
+## Notes
+
 [https://www.pinecone.io/learn/faiss-tutorial/](https://www.pinecone.io/learn/faiss-tutorial/)
 - [https://github.com/facebookresearch/faiss](https://github.com/facebookresearch/faiss)
   - Should take a loot at this

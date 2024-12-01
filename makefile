@@ -10,3 +10,7 @@ python_test_kmeans: build
 
 python_test_stream: build
 	cd python-examples/vector-stream && python3 VectorStream.py
+
+
+tests: python_test_kmeans python_test_stream
+	echo "Done"

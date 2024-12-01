@@ -91,8 +91,6 @@ mod tests {
     #[test]
     fn it_should_have_a_functionally_file_format() {
         use crate::fileformat::fileformat::FileFormat;
-        use std::fs::File;
-        use std::io::prelude::*;
         use std::io::Cursor;
         use crate::vector::vector::Vector;
         
@@ -139,8 +137,6 @@ mod tests {
     fn it_should_be_able_to_find_closest_vectors_from_centroids_in_db() {
         use crate::fileformat::fileformat::FileFormat;
         use crate::fileformat::database::Database;
-        use std::fs::File;
-        use std::io::prelude::*;
         use std::io::Cursor;
         use crate::vector::vector::Vector;
         

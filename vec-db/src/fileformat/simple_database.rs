@@ -13,16 +13,16 @@ impl SimpleDatabase {
     pub fn new(
     ) -> SimpleDatabase {
         return SimpleDatabase {
-            kmeans: Kmeans::new(100)
+            kmeans: Kmeans::new(100),
         };
     }
 
-    pub fn save(&mut self, vector: Vector) {
+    pub fn insert(&mut self, vector: Vector) {
         /*
         * Save the vector into k-means ?
         * We provide 100 vector sampling -> for each centroid
         * K-means only add new cluster at 100 nodes in a centroid ? 
-        * -> Means we split the rest into a seperate file
+        * -> Means we split the rest into a separate file
         */
         self.kmeans.add(vector);
         if self.kmeans.centroids().len() == 0{
@@ -30,7 +30,17 @@ impl SimpleDatabase {
             self.kmeans.add_centroid(
                 Vector::new(self.kmeans.get_zero_vec())
             );
-        } 
+        }
+
+        // Why is there no more centroids added ? 
+        self.kmeans.fit(10);
+    }
+
+    pub fn query(&mut self, vector: Vector) -> Vec<Vec<f64>> {
+        // 1. Find the closest centroid.
+        // 2. Find the closest vector inside that group ? 
+        // ^ this might be good enough for v0.
+        self.kmeans.find_closest_data_points(&vector)
     }
 
     pub fn load(&mut self) {
@@ -41,13 +51,13 @@ impl SimpleDatabase {
             let b = std::path::Path::new(result).exists();
             if b {
                 let mut file = self.get_file_cluster(i);
-                // load the file, and load into kmeans
+                // load the file, and load into k-means
                 let mut file_format = FileFormat::new(&mut file, 100);
                 for vector in 0..file_format.get_centroids() {
                     if i == -1 {
-                        self.kmeans.add_centroid(file_format.read_vector((vector as usize)));
+                        self.kmeans.add_centroid(file_format.read_vector(vector as usize));
                     } else {
-                        self.kmeans.add(file_format.read_vector((vector as usize)));
+                        self.kmeans.add(file_format.read_vector(vector as usize));
                     }
                 }
             }
@@ -104,13 +114,13 @@ impl SimpleDatabase {
         let result = &self.get_file_name(index);
         let b = std::path::Path::new(result).exists();
         if b && index != -1 {
-            let mut file = OpenOptions::new()
+            let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true).open(result).unwrap();
             return file;
         } else {
-            let mut file = File::create(result).unwrap();
+            let file = File::create(result).unwrap();
             return file;
         }
     }
