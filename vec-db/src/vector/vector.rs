@@ -78,6 +78,22 @@ impl Vector {
         };
     }
 
+    pub fn div_constant(&self, constant: f64) -> Vector {
+        return self.mul_constant(1.0 / constant);
+    }
+
+    pub fn abs(&self) -> Vector {
+        let mut vec = self.vector.clone();
+
+        for i in 0..self.len() {
+            vec[i] = vec[i].abs()
+        }
+
+        return Vector {
+            vector: vec,
+        };
+    }
+
     pub fn equal(&self, other: Vector) -> bool {
         if self.len() != other.len() {
             return false;
@@ -113,7 +129,6 @@ impl Vector {
     }
 
     pub fn println(&self) {
-//        println!("We out here");
         for (index, i) in self.vector.iter().enumerate() {
             if index > 0 {
                 print!(", ");
@@ -121,6 +136,14 @@ impl Vector {
             print!("{}", i);
         }
         print!("\n");
+    }
+
+    pub fn sum_d1(&self) -> f64 {
+        let mut value = 0.0;
+        for (_, i) in self.vector.iter().enumerate() {
+            value += i;
+        }
+        value
     }
 }
 

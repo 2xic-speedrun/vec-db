@@ -1,3 +1,4 @@
+## K-means demo
 
 Example with simple 2d dataset from (`n_samples=100, n_features=2`)
 

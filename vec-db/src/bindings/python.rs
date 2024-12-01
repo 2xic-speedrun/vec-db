@@ -47,7 +47,7 @@ impl PyKmeans {
     }
 
     fn add(&mut self, vec: Vec<f64>) {
-        self.kmeans.add(Vector::new(vec));
+        self.kmeans.add_datapoint(Vector::new(vec));
     }
 
     fn fit(&mut self, iterations: i64) {

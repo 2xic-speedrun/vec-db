@@ -21,15 +21,11 @@ impl PyDatabase {
         self.database.insert(Vector::new(vec));
     }
 
-    fn query(&mut self, vec: Vec<f64>) -> Vec<Vec<f64>> {
-        self.database.query(Vector::new(vec))
+    fn centroids(&mut self) -> Vec<Vec<f64>> {
+        self.database.centrodis()
     }
 
-    fn load(&mut self) {
-        self.database.load();
-    }
-
-    fn dump(&mut self){
-        self.database.dump();
+    fn query(&mut self, vec: Vec<f64>, n: usize) -> Vec<Vec<f64>> {
+        self.database.query(Vector::new(vec), n)
     }
 }

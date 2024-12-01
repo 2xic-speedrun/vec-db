@@ -1,11 +1,14 @@
 use crate::vector::vector::Vector;
 use core::f64::INFINITY;
 use std::collections::HashMap;
+use rand::Rng;
 
 pub struct Kmeans {
     centroids: Vec<Vector>,
+    inertia_distance_centroids: Vec<f64>,
     dataset: Vec<Vector>,
-    vector_length: usize
+    vector_length: usize,
+    fit_index: i64,
 }
 
 impl Kmeans  {
@@ -13,7 +16,9 @@ impl Kmeans  {
         return Kmeans{
             dataset: Vec::new(),
             centroids: Vec::new(),
+            inertia_distance_centroids: Vec::new(),
             vector_length: vector_length,
+            fit_index: 0,
         }
     }
 
@@ -23,7 +28,7 @@ impl Kmeans  {
         self.centroids.push(vector);
     }
 
-    pub fn add(&mut self, vector: Vector) {
+    pub fn add_datapoint(&mut self, vector: Vector) {
         self.dataset.push(vector);
     }
 
@@ -36,8 +41,24 @@ impl Kmeans  {
     }
 
     pub fn fit(&mut self, iterations: i64) {
+        let mut previous_run = self.inertia_distance_centroids.clone();
+
         for _ in 0..iterations {
             self.forward();
+
+            if self.fit_index > 0 && self.fit_index % (75 * (self.centroids().len() as i64)) == 0{
+                let previous_average_inertia = Vector::new(previous_run.clone()).abs().sum_d1() / (self.centroids().len() as f64);
+                let new_average_inertia = Vector::new(self.inertia_distance_centroids.clone()).abs().sum_d1() / (self.centroids().len() as f64);
+        
+                let delta  = (new_average_inertia - previous_average_inertia) / previous_average_inertia;                
+                if delta > 0.2 {
+                    self.add_centroid(
+                        Vector::new(self.get_random_vec())
+                    );       
+                    previous_run =   self.inertia_distance_centroids.clone();
+                }
+            }
+            self.fit_index += 1
         }
     }
 
@@ -64,16 +85,17 @@ impl Kmeans  {
          return best_index;
     }
 
-    pub fn find_closest_data_points(&self, data_point: &Vector) -> Vec<Vec<f64>> {
+    pub fn find_closest_data_points(&self, data_point: &Vector, n: usize) -> Vec<Vec<f64>> {
         let mut results:Vec<Vec<f64>> = Vec::new();
 
         let clustered_data_pints = self.get_centroids_data_point().clone();
         let centroid = self.find_closest_centroid(data_point).clone();
+        let items = &clustered_data_pints.clone()[&centroid.clone()];
 
-        for index in 0..10 {
-            if index < clustered_data_pints.clone()[&centroid.clone()].len() {
-                let vecdd = clustered_data_pints.clone()[&centroid.clone()][index];
-                results.push(vecdd.raw().clone());
+        for index in 0..n {
+            if index < items.len() {
+                let vector = items[index];
+                results.push(vector.raw().clone());
             }
         }
 
@@ -85,28 +107,29 @@ impl Kmeans  {
         //      Currently we make the user do it
         let clustered_data_pints = self.get_centroids_data_point().clone();
         let mut new_centorids = Vec::with_capacity(self.centroids.len() + 1);
+        let mut new_inertia_distance:Vec<f64> = Vec::with_capacity(self.centroids.len() + 1);
         for _ in 0..self.centroids.len(){
             new_centorids.push(Vector::new(self.get_zero_vec().clone()));
+            new_inertia_distance.push(0.0);
         }
 
         for (key, vectors) in clustered_data_pints.clone().into_iter() {
-            let clustered_len = vectors.len();
+            let clustered_size = vectors.len();
             // TODO: Should be possible to initialize a zero vector based on another vec
             let zero_vec = self.get_zero_vec().clone();
-            if 0 < clustered_len {
-                let mut delta_vector: Vector = Vector::new(zero_vec);
-                for vector in vectors {
-                    delta_vector = delta_vector.add(vector).unwrap();
-                }
-    
-                delta_vector = delta_vector.mul_constant(1.0/(clustered_len as f64));
-
-                new_centorids[key] = delta_vector;
+            let mut delta_vector: Vector = Vector::new(zero_vec);
+            for vector in vectors {
+                delta_vector = delta_vector.add(vector).unwrap();
             }
+            delta_vector = delta_vector.div_constant(clustered_size as f64).clone();
+
+            new_centorids[key] = delta_vector.clone();
+            new_inertia_distance[key] += delta_vector.clone().sum_d1();
         }
 
 
         self.centroids = new_centorids;
+        self.inertia_distance_centroids = new_inertia_distance;
     }
 
     fn get_centroids_data_point(&self) ->  HashMap<usize, Vec<&Vector>> {
@@ -138,6 +161,15 @@ impl Kmeans  {
         let mut zero_vec = Vec::new();
         for _ in 0..self.vector_length {
             zero_vec.push(0.0);
+        }
+        zero_vec
+    }
+
+    pub fn get_random_vec(&self) -> Vec<f64> {
+        let mut rng = rand::thread_rng();
+        let mut zero_vec = Vec::new();
+        for _ in 0..self.vector_length {
+            zero_vec.push(rng.gen());
         }
         zero_vec
     }
