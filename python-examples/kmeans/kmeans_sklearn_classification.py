@@ -17,12 +17,7 @@ n_samples = 1_00
 )
 
 for i in X:
-    kmeans.add(i)
-
-mean_vector = -X.mean(axis=0) / 2
-mean_vector_times_2 = mean_vector * 2
-kmeans.add_centroid(mean_vector)
-kmeans.add_centroid(mean_vector_times_2)
+    kmeans.add_datapoint(i)
 
 kmeans.fit(1_000)
 

@@ -29,6 +29,10 @@ impl Kmeans  {
     }
 
     pub fn add_datapoint(&mut self, vector: Vector) {
+        if self.centroids.len() == 0 {
+            self.centroids.push(Vector::new(self.get_random_vec()));
+            self.centroids.push(Vector::new(self.get_random_vec()));
+        }
         self.dataset.push(vector);
     }
 
@@ -46,6 +50,7 @@ impl Kmeans  {
         for _ in 0..iterations {
             self.forward();
 
+            // Check if more centroids need to be added
             if self.fit_index > 0 && self.fit_index % (75 * (self.centroids().len() as i64)) == 0{
                 let previous_average_inertia = Vector::new(previous_run.clone()).abs().sum_d1() / (self.centroids().len() as f64);
                 let new_average_inertia = Vector::new(self.inertia_distance_centroids.clone()).abs().sum_d1() / (self.centroids().len() as f64);
@@ -95,7 +100,9 @@ impl Kmeans  {
         for index in 0..n {
             if index < items.len() {
                 let vector = items[index];
-                results.push(vector.raw().clone());
+                if !vector.equal(data_point.clone()){
+                    results.push(vector.raw().clone());
+                }
             }
         }
 

@@ -46,7 +46,7 @@ impl PyKmeans {
         return new_vec;
     }
 
-    fn add(&mut self, vec: Vec<f64>) {
+    fn add_datapoint(&mut self, vec: Vec<f64>) {
         self.kmeans.add_datapoint(Vector::new(vec));
     }
 

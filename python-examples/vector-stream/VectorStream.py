@@ -1,10 +1,11 @@
 from libvec_db import PyDatabase
 from sklearn import datasets
+from plot import plot
 
 # We have many samples, and will stream them over time!
 n_features = 100
-n_samples = 10_00
-classes = 10
+n_samples = 30
+classes = 2
 
 
 (X, y) = datasets.make_classification(
@@ -26,3 +27,11 @@ for i in X:
 # TODO: add test to make the output is actually close to the rest.
 print(len(database.query(X[0], 3)))
 print(len(database.centroids()))
+
+plot(
+    [X[0]],
+    database.query(X[0], 3),
+    X,
+    y,
+    "similar.png"
+)
