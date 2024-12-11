@@ -21,26 +21,30 @@ def get_centroid():
 
     return [point_x, point_y]
 
-classes = 2
-n_features = 2
-kmeans = PyKmeans(n_features)
-n_samples = 1_00
+def classify():
+    classes = 2
+    n_features = 2
+    kmeans = PyKmeans(n_features)
+    n_samples = 1_00
 
 
-(X, y) = make_classification(
-    n_samples=n_samples
-)
+    (X, y) = make_classification(
+        n_samples=n_samples
+    )
 
-for i in X:
-    kmeans.add_datapoint(i)
+    for i in X:
+        kmeans.add_datapoint(i)
 
-kmeans.fit(10_000)
+    kmeans.fit(10_000)
 
-plot(
-    kmeans=kmeans,
-    X=X,
-    y=y,
-    classes=classes,
-    use_sklearn=False,
-    filename="simple.png"
-)
+    plot(
+        kmeans=kmeans,
+        X=X,
+        y=y,
+        classes=classes,
+        use_sklearn=False,
+        filename="simple.png"
+    )
+
+if __name__ == "__main__":
+    classify()

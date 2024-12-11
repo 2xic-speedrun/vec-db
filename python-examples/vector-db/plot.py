@@ -26,7 +26,6 @@ def plot(query, found, X, y, filename):
     for i in range(n_samples + len(query), n_samples + len(found) + len(query)):
         if np.allclose(X[i], X[n_samples + len(query)]):
             continue
-        print(X[i])
         plt.scatter(*X[i], color="blue")
 
     plt.savefig(filename)

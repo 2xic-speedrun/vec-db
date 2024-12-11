@@ -1,7 +1,6 @@
-use crate::vector::vector::Vector;
-use core::f64::INFINITY;
-use std::collections::HashMap;
+use crate::math::vector::Vector;
 use rand::Rng;
+use std::collections::HashMap;
 
 pub struct Kmeans {
     centroids: Vec<Vector>,
@@ -11,25 +10,25 @@ pub struct Kmeans {
     fit_index: i64,
 }
 
-impl Kmeans  {
+impl Kmeans {
     pub fn new(vector_length: usize) -> Kmeans {
-        return Kmeans{
+        Kmeans {
             dataset: Vec::new(),
             centroids: Vec::new(),
             inertia_distance_centroids: Vec::new(),
-            vector_length: vector_length,
+            vector_length,
             fit_index: 0,
         }
     }
 
     // TODO: Replace this method with some rand method available on vector
     // TODO: Need this to change depending on how many items are in the database
-    pub fn add_centroid(&mut self, vector: Vector){
+    pub fn add_centroid(&mut self, vector: Vector) {
         self.centroids.push(vector);
     }
 
     pub fn add_datapoint(&mut self, vector: Vector) {
-        if self.centroids.len() == 0 {
+        if self.centroids.is_empty() {
             self.centroids.push(Vector::new(self.get_random_vec()));
             self.centroids.push(Vector::new(self.get_random_vec()));
         }
@@ -37,11 +36,11 @@ impl Kmeans  {
     }
 
     pub fn centroids(&self) -> &Vec<Vector> {
-        return &self.centroids;
+        &self.centroids
     }
 
     pub fn dataset(&self) -> &Vec<Vector> {
-        return &self.dataset;
+        &self.dataset
     }
 
     pub fn fit(&mut self, iterations: i64) {
@@ -51,62 +50,65 @@ impl Kmeans  {
             self.forward();
 
             // Check if more centroids need to be added
-            if self.fit_index > 0 && self.fit_index % (75 * (self.centroids().len() as i64)) == 0{
-                let previous_average_inertia = Vector::new(previous_run.clone()).abs().sum_d1() / (self.centroids().len() as f64);
-                let new_average_inertia = Vector::new(self.inertia_distance_centroids.clone()).abs().sum_d1() / (self.centroids().len() as f64);
-        
-                let delta  = (new_average_inertia - previous_average_inertia) / previous_average_inertia;                
+            if self.fit_index > 0 && self.fit_index % (75 * (self.centroids().len() as i64)) == 0 {
+                let previous_average_inertia = Vector::new(previous_run.clone()).abs().sum_d1()
+                    / (self.centroids().len() as f64);
+                let new_average_inertia = Vector::new(self.inertia_distance_centroids.clone())
+                    .abs()
+                    .sum_d1()
+                    / (self.centroids().len() as f64);
+
+                let delta =
+                    (new_average_inertia - previous_average_inertia) / previous_average_inertia;
                 if delta > 0.2 {
-                    self.add_centroid(
-                        Vector::new(self.get_random_vec())
-                    );       
-                    previous_run =   self.inertia_distance_centroids.clone();
+                    self.add_centroid(Vector::new(self.get_random_vec()));
+                    previous_run = self.inertia_distance_centroids.clone();
                 }
             }
             self.fit_index += 1
         }
     }
 
-    pub fn results(&self) -> Vec<(&Vector, i8)>{
+    pub fn results(&self) -> Vec<(&Vector, i8)> {
         let mut results: Vec<(&Vector, i8)> = Vec::new();
         for i in self.dataset.iter() {
             results.push((i, (self.find_closest_centroid(i)) as i8));
         }
-        return results;
+        results
     }
 
     fn find_closest_centroid(&self, data_point: &Vector) -> usize {
-         let mut best_score = INFINITY;
-         let mut best_index: usize = 0;
-         for (index, centroid) in self.centroids.iter().enumerate() {
-             let distance = centroid.l2_distance(data_point).unwrap();
+        let mut best_score = f64::INFINITY;
+        let mut best_index: usize = 0;
+        for (index, centroid) in self.centroids.iter().enumerate() {
+            let distance = centroid.l2_distance(data_point).unwrap();
 
-             if distance < best_score {
-                 best_score = distance;
-                 best_index = index;
-             }
-         }
+            if distance < best_score {
+                best_score = distance;
+                best_index = index;
+            }
+        }
 
-         return best_index;
+        best_index
     }
 
     pub fn find_closest_data_points(&self, data_point: &Vector, n: usize) -> Vec<Vec<f64>> {
-        let mut results:Vec<Vec<f64>> = Vec::new();
+        let mut results: Vec<Vec<f64>> = Vec::new();
 
         let clustered_data_pints = self.get_centroids_data_point().clone();
-        let centroid = self.find_closest_centroid(data_point).clone();
+        let centroid = self.find_closest_centroid(data_point);
         let items = &clustered_data_pints.clone()[&centroid.clone()];
 
         for index in 0..n {
             if index < items.len() {
                 let vector = items[index];
-                if !vector.equal(data_point.clone()){
+                if !vector.equal(data_point.clone()) {
                     results.push(vector.raw().clone());
                 }
             }
         }
 
-        return results;
+        results
     }
 
     fn forward(&mut self) {
@@ -114,8 +116,8 @@ impl Kmeans  {
         //      Currently we make the user do it
         let clustered_data_pints = self.get_centroids_data_point().clone();
         let mut new_centorids = Vec::with_capacity(self.centroids.len() + 1);
-        let mut new_inertia_distance:Vec<f64> = Vec::with_capacity(self.centroids.len() + 1);
-        for _ in 0..self.centroids.len(){
+        let mut new_inertia_distance: Vec<f64> = Vec::with_capacity(self.centroids.len() + 1);
+        for _ in 0..self.centroids.len() {
             new_centorids.push(Vector::new(self.get_zero_vec().clone()));
             new_inertia_distance.push(0.0);
         }
@@ -134,41 +136,32 @@ impl Kmeans  {
             new_inertia_distance[key] += delta_vector.clone().sum_d1();
         }
 
-
         self.centroids = new_centorids;
         self.inertia_distance_centroids = new_inertia_distance;
     }
 
-    fn get_centroids_data_point(&self) ->  HashMap<usize, Vec<&Vector>> {
-        let mut clustered_data_pints:HashMap<usize, Vec<&Vector>> = HashMap::new();
+    fn get_centroids_data_point(&self) -> HashMap<usize, Vec<&Vector>> {
+        let mut clustered_data_pints: HashMap<usize, Vec<&Vector>> = HashMap::new();
 
         for data_point in self.dataset.iter() {
-
             let best_index = self.find_closest_centroid(data_point);
 
             match clustered_data_pints.get_mut(&best_index) {
                 Some(value) => {
                     value.push(data_point);
-                },
+                }
                 None => {
-                    let mut vec = Vec::new();
-                    vec.push(data_point);
-                    clustered_data_pints.insert(
-                        best_index,
-                        vec
-                    );
+                    let vec: Vec<&Vector> = vec![data_point];
+                    clustered_data_pints.insert(best_index, vec);
                 }
             };
         }
 
-        return clustered_data_pints;
+        clustered_data_pints
     }
 
     pub fn get_zero_vec(&self) -> Vec<f64> {
-        let mut zero_vec = Vec::new();
-        for _ in 0..self.vector_length {
-            zero_vec.push(0.0);
-        }
+        let zero_vec = vec![0.0;self.vector_length];
         zero_vec
     }
 

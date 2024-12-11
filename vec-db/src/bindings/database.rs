@@ -1,19 +1,18 @@
+use crate::db::simple_database::SimpleDatabase;
+use crate::math::vector::Vector;
 use pyo3::prelude::*;
-use crate::vector::vector::Vector;
-use crate::fileformat::simple_database::SimpleDatabase;
-
 
 #[pyclass]
 pub struct PyDatabase {
-    database: SimpleDatabase
+    database: SimpleDatabase,
 }
 
 #[pymethods]
 impl PyDatabase {
     #[new]
     fn new() -> PyDatabase {
-        return PyDatabase {
-            database: SimpleDatabase::new()
+        PyDatabase {
+            database: SimpleDatabase::new(),
         }
     }
 
