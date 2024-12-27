@@ -1,6 +1,6 @@
 .PHONY: tests
 
-build:
+build: lint
 	cd vec-db && cargo test && cargo build --release
 	cp ./vec-db/target/release/libvec_db.so ./python-examples/kmeans/libvec_db.so
 	cp ./vec-db/target/release/libvec_db.so ./python-examples/vector-db/libvec_db.so
@@ -15,5 +15,5 @@ tests: python_test_kmeans python_test_stream
 	echo "Done"
 
 lint:
-	cargo fmt
-	cargo clippy
+	cd vec-db && cargo fmt
+	cd vec-db && cargo clippy

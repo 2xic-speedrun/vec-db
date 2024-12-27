@@ -17,7 +17,9 @@ classes = 2
     shuffle=True
 )
 
-database = PyDatabase()
+database = PyDatabase(
+    vector_size=n_features
+)
 
 # Insert all the entries
 for i in X:
@@ -25,12 +27,11 @@ for i in X:
 
 # Results
 # TODO: add test to make the output is actually close to the rest.
-print(len(database.query(X[0], 3)))
-print(len(database.centroids()))
+results = database.query(X[0], 3)
 
 plot(
     [X[0]],
-    database.query(X[0], 3),
+    results,
     X,
     y,
     "similar.png"

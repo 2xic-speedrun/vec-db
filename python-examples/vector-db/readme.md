@@ -1,4 +1,7 @@
-## Simple vector database example
+## Simple vector database query example
+Find the closest similar vectors. Note that we are using `TSNE` and a vector with 100 features so there is a small 
 
-See [VectorStream.py](./VectorStream.py) for the code.
+![similar](./similar.png)
+
+See [VectorStream.py](./test_query.py) for the code.
 

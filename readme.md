@@ -1,6 +1,8 @@
 # Simple vector database
 **This is a simple in-memory vector database. Not for use in production.**
 
+This is just a basic vector database that uses k-means to reduce the number of vector lookups. See links below for more advanced indexing methods that will help with speedups. 
+
 See [examples](./python-examples/) for some code examples. 
 
 ## Thanks
@@ -10,5 +12,5 @@ These are also good resources
 - [Algorithms Powering our Vector Database](https://thebook.devrev.ai/blog/2024-03-04-vector-db-1/)
 - [Vector Database: The Secret Behind Large Language Models Capabilities](https://youssefh.substack.com/p/vector-database-the-secret-behind)
 - [Everything You Need to Know about Vector Index Basics](https://zilliz.com/learn/vector-index)
--  [Nearest Neighbor Indexes: What Are IVFFlat Indexes in Pgvector and How Do They Work](https://www.timescale.com/blog/nearest-neighbor-indexes-what-are-ivfflat-indexes-in-pgvector-and-how-do-they-work/) 
--  
+- [Nearest Neighbor Indexes: What Are IVFFlat Indexes in Pgvector and How Do They Work](https://www.timescale.com/blog/nearest-neighbor-indexes-what-are-ivfflat-indexes-in-pgvector-and-how-do-they-work/) 
+- [Vector Search Explained](https://weaviate.io/blog/vector-search-explained)

@@ -12,7 +12,11 @@ impl Vector {
 
     pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
         if self.len() != other.len() {
-            panic!("Wrong size");
+            panic!(
+                "Vector sizes does not match, {} != {}",
+                self.len(),
+                other.len()
+            );
         }
 
         let mut distance: f64 = 0.0;
@@ -28,7 +32,11 @@ impl Vector {
 
     pub fn subtract(&self, other: Vector) -> Option<Vector> {
         if self.len() != other.len() {
-            panic!("Wrong size");
+            panic!(
+                "Vector sizes does not match, {} != {}",
+                self.len(),
+                other.len()
+            );
         }
 
         let mut vec = self.vector.clone();
@@ -44,7 +52,11 @@ impl Vector {
 
     pub fn add(&self, other: &Vector) -> Option<Vector> {
         if self.len() != other.len() {
-            panic!("Wrong size");
+            panic!(
+                "Vector sizes does not match, {} != {}",
+                self.len(),
+                other.len()
+            );
         }
 
         let mut vec = self.vector.clone();

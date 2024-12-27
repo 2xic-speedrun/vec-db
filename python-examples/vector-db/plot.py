@@ -2,30 +2,34 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import numpy as np
 
+def find_index(a, b):
+    for index, v in enumerate(a):
+        if v == b:
+            return index
+    return -1
 
-def plot(query, found, X, y, filename):
+def plot(query_vec, close_vecs, X, y, filename):
     colors = ["y", "g"]
 
     n_samples = X.shape[0]
 
-    assert len(found) > 1
-    assert len(query) > 0
+    assert len(close_vecs) >= 1
+    assert len(query_vec) > 0
 
-    X = np.concatenate((X, np.asarray(query).reshape((1, -1)), np.asarray(found)), axis=0)
-    X = TSNE(n_components=2, learning_rate='auto', init='random', perplexity=12).fit_transform(
-        X
-    )
+    X_org = X.copy().tolist()
+    X = np.concatenate((X, np.asarray(query_vec).reshape((1, -1)), np.asarray(close_vecs)), axis=0)
+    X = TSNE(n_components=2, learning_rate='auto', init='random').fit_transform(X)
 
     for i in range(n_samples):
         plt.scatter(*X[i], color=colors[y[i]])
     
-    for i in range(n_samples, n_samples + len(query)):
-        plt.scatter(*X[i], color="red")
-        print(X[i])
+    index = find_index(X_org, query_vec[0].tolist())
+    assert index != -1
+    plt.scatter(*X[index], color="red")
 
-    for i in range(n_samples + len(query), n_samples + len(found) + len(query)):
-        if np.allclose(X[i], X[n_samples + len(query)]):
-            continue
-        plt.scatter(*X[i], color="blue")
+    for i in range(len(close_vecs)):
+        index = find_index(X_org, close_vecs[i])
+        assert index != -1
+        plt.scatter(*X[index], color="blue")
 
     plt.savefig(filename)

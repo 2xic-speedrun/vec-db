@@ -10,9 +10,9 @@ pub struct PyDatabase {
 #[pymethods]
 impl PyDatabase {
     #[new]
-    fn new() -> PyDatabase {
+    fn new(vector_size: usize) -> PyDatabase {
         PyDatabase {
-            database: SimpleDatabase::new(),
+            database: SimpleDatabase::new(vector_size),
         }
     }
 

@@ -1,6 +1,6 @@
 pub mod bindings;
-pub mod db;
 pub mod clustering;
+pub mod db;
 pub mod math;
 
 #[cfg(test)]

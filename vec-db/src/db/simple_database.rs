@@ -7,14 +7,14 @@ pub struct SimpleDatabase {
 
 impl Default for SimpleDatabase {
     fn default() -> Self {
-        Self::new()
+        Self::new(100)
     }
 }
 
 impl SimpleDatabase {
-    pub fn new() -> SimpleDatabase {
+    pub fn new(vector_size: usize) -> SimpleDatabase {
         SimpleDatabase {
-            kmeans: Kmeans::new(100),
+            kmeans: Kmeans::new(vector_size),
         }
     }
 
@@ -27,7 +27,6 @@ impl SimpleDatabase {
          */
         self.kmeans.add_datapoint(vector);
         if self.kmeans.centroids().is_empty() {
-            // Push random
             self.kmeans
                 .add_centroid(Vector::new(self.kmeans.get_random_vec()));
         }

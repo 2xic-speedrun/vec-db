@@ -1,6 +1,6 @@
 use crate::math::vector::Vector;
 use rand::Rng;
-use std::collections::HashMap;
+use std::{cmp::min, collections::HashMap};
 
 pub struct Kmeans {
     centroids: Vec<Vector>,
@@ -21,8 +21,6 @@ impl Kmeans {
         }
     }
 
-    // TODO: Replace this method with some rand method available on vector
-    // TODO: Need this to change depending on how many items are in the database
     pub fn add_centroid(&mut self, vector: Vector) {
         self.centroids.push(vector);
     }
@@ -98,13 +96,11 @@ impl Kmeans {
         let clustered_data_pints = self.get_centroids_data_point().clone();
         let centroid = self.find_closest_centroid(data_point);
         let items = &clustered_data_pints.clone()[&centroid.clone()];
+        let max_index = min(n, items.len());
 
-        for index in 0..n {
-            if index < items.len() {
-                let vector = items[index];
-                if !vector.equal(data_point.clone()) {
-                    results.push(vector.raw().clone());
-                }
+        for vector in items.iter().take(max_index) {
+            if !vector.equal(data_point.clone()) {
+                results.push(vector.raw().clone());
             }
         }
 
@@ -112,8 +108,6 @@ impl Kmeans {
     }
 
     fn forward(&mut self) {
-        // TODO: How does one efficiently set a centroid location ?
-        //      Currently we make the user do it
         let clustered_data_pints = self.get_centroids_data_point().clone();
         let mut new_centorids = Vec::with_capacity(self.centroids.len() + 1);
         let mut new_inertia_distance: Vec<f64> = Vec::with_capacity(self.centroids.len() + 1);
@@ -161,7 +155,7 @@ impl Kmeans {
     }
 
     pub fn get_zero_vec(&self) -> Vec<f64> {
-        let zero_vec = vec![0.0;self.vector_length];
+        let zero_vec = vec![0.0; self.vector_length];
         zero_vec
     }
 
