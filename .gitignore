@@ -1,3 +1,4 @@
 target
 *.pyc
 *.raw
+libvec_db.so

@@ -10,6 +10,11 @@ impl Vector {
         Vector { vector: vec }
     }
 
+    pub fn empty(size: usize) -> Vector {
+        let vec: Vec<f64> = Vec::with_capacity(size);
+        Vector::new(vec)
+    }
+
     pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
         if self.len() != other.len() {
             panic!(
@@ -138,7 +143,7 @@ impl Vector {
             if index > 0 {
                 print!(", ");
             }
-            print!("{}", i);
+            print!("{i}");
         }
         println!();
     }
@@ -157,9 +162,9 @@ impl fmt::Display for Vector {
         let _ = write!(f, "[");
         for (index, i) in self.vector.iter().enumerate() {
             if index > 0 {
-                let _ = write!(f, ", ");
+                write!(f, ", ")?;
             }
-            let _ = write!(f, "{}", i);
+            write!(f, "{i}")?;
         }
         write!(f, "]")
     }

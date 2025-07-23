@@ -50,3 +50,15 @@ impl SimpleDatabase {
         raw
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{db::simple_database::SimpleDatabase, math::vector::Vector};
+
+    #[test]
+    pub fn test_empty_query() {
+        let mut db = SimpleDatabase::new(100);
+        let results = db.query(Vector::empty(100), 5);
+        assert_eq!(results.len(), 0);
+    }
+}

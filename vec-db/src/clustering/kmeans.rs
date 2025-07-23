@@ -95,12 +95,14 @@ impl Kmeans {
 
         let clustered_data_pints = self.get_centroids_data_point().clone();
         let centroid = self.find_closest_centroid(data_point);
-        let items = &clustered_data_pints.clone()[&centroid.clone()];
-        let max_index = min(n, items.len());
+        let items = &clustered_data_pints.get(&centroid.clone());
+        if let Some(items) = items {
+            let max_index = min(n, items.len());
 
-        for vector in items.iter().take(max_index) {
-            if !vector.equal(data_point.clone()) {
-                results.push(vector.raw().clone());
+            for vector in items.iter().take(max_index) {
+                if !vector.equal(data_point.clone()) {
+                    results.push(vector.raw().clone());
+                }
             }
         }
 
