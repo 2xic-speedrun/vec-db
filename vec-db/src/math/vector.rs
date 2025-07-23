@@ -1,5 +1,7 @@
 use std::fmt;
 
+use rand::Rng;
+
 #[derive(Clone)]
 pub struct Vector {
     vector: Vec<f64>,
@@ -11,8 +13,20 @@ impl Vector {
     }
 
     pub fn empty(size: usize) -> Vector {
-        let vec: Vec<f64> = Vec::with_capacity(size);
+        let mut vec: Vec<f64> = Vec::with_capacity(size);
+        for idx in 0..size {
+            vec.insert(idx, 0.0);
+        }
         Vector::new(vec)
+    }
+
+    pub fn rand(size: usize) -> Vector {
+        let mut rng = rand::thread_rng();
+        let mut zero_vec = Vec::new();
+        for _ in 0..size {
+            zero_vec.push(rng.gen());
+        }
+        Vector::new(zero_vec)
     }
 
     pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
@@ -100,13 +114,12 @@ impl Vector {
         Vector { vector: vec }
     }
 
-    pub fn equal(&self, other: Vector) -> bool {
+    pub fn equal(&self, other: &Vector) -> bool {
         if self.len() != other.len() {
             return false;
         }
 
-        let vec = self.vector.clone();
-        for (i, item) in vec.iter().enumerate().take(self.len()) {
+        for (i, item) in self.vector.iter().enumerate().take(self.len()) {
             let other_value = other.get(i);
             if let Some(other_value) = other_value {
                 if *item != other_value {

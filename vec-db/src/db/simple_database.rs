@@ -25,10 +25,10 @@ impl SimpleDatabase {
          * K-means only add new cluster at 100 nodes in a centroid ?
          * -> Means we split the rest into a separate file
          */
+        let len = vector.len();
         self.kmeans.add_datapoint(vector);
         if self.kmeans.centroids().is_empty() {
-            self.kmeans
-                .add_centroid(Vector::new(self.kmeans.get_random_vec()));
+            self.kmeans.add_centroid(Vector::rand(len));
         }
 
         // Why is there no more centroids added ?

@@ -18,7 +18,7 @@ mod tests {
         let c = Vector::new(vec_c);
 
         let subtracted_vector = a.subtract(b).unwrap();
-        assert!(subtracted_vector.equal(c));
+        assert!(subtracted_vector.equal(&c));
     }
 
     #[test]
@@ -65,8 +65,8 @@ mod tests {
         kmeans.fit(2);
 
         let centroids = kmeans.centroids();
-        assert!(!centroids[0].equal(base_centroid.mul_constant(-3.0)));
-        assert!(!centroids[1].equal(base_centroid.mul_constant(5.0)));
+        assert!(!centroids[0].equal(&base_centroid.mul_constant(-3.0)));
+        assert!(!centroids[1].equal(&base_centroid.mul_constant(5.0)));
     }
 }
 

@@ -32,7 +32,7 @@ def test_similarity_quality():
     assert avg_distance < 7, f"Results too far from query point: {avg_distance}"
 
 
-@pytest.mark.parametrize("size", [25, 100])
+@pytest.mark.parametrize("size", [25, 100, 500])
 def test_performance_scaling(size):
     """Test that performance doesn't degrade too badly with size."""
     insert_times = []

@@ -1,5 +1,4 @@
 use crate::math::vector::Vector;
-use rand::Rng;
 use std::{cmp::min, collections::HashMap};
 
 pub struct Kmeans {
@@ -27,8 +26,8 @@ impl Kmeans {
 
     pub fn add_datapoint(&mut self, vector: Vector) {
         if self.centroids.is_empty() {
-            self.centroids.push(Vector::new(self.get_random_vec()));
-            self.centroids.push(Vector::new(self.get_random_vec()));
+            self.centroids.push(Vector::rand(self.vector_length));
+            self.centroids.push(Vector::rand(self.vector_length));
         }
         self.dataset.push(vector);
     }
@@ -59,7 +58,7 @@ impl Kmeans {
                 let delta =
                     (new_average_inertia - previous_average_inertia) / previous_average_inertia;
                 if delta > 0.2 {
-                    self.add_centroid(Vector::new(self.get_random_vec()));
+                    self.add_centroid(Vector::rand(self.vector_length));
                     previous_run = self.inertia_distance_centroids.clone();
                 }
             }
@@ -93,14 +92,14 @@ impl Kmeans {
     pub fn find_closest_data_points(&self, data_point: &Vector, n: usize) -> Vec<Vec<f64>> {
         let mut results: Vec<Vec<f64>> = Vec::new();
 
-        let clustered_data_pints = self.get_centroids_data_point().clone();
+        let clustered_data_pints = self.get_centroids_data_point();
         let centroid = self.find_closest_centroid(data_point);
-        let items = &clustered_data_pints.get(&centroid.clone());
+        let items = clustered_data_pints.get(&centroid);
         if let Some(items) = items {
             let max_index = min(n, items.len());
 
             for vector in items.iter().take(max_index) {
-                if !vector.equal(data_point.clone()) {
+                if !vector.equal(data_point) {
                     results.push(vector.raw().clone());
                 }
             }
@@ -110,26 +109,27 @@ impl Kmeans {
     }
 
     fn forward(&mut self) {
-        let clustered_data_pints = self.get_centroids_data_point().clone();
+        let clustered_data_pints = self.get_centroids_data_point();
         let mut new_centorids = Vec::with_capacity(self.centroids.len() + 1);
         let mut new_inertia_distance: Vec<f64> = Vec::with_capacity(self.centroids.len() + 1);
+        debug_assert_ne!(self.vector_length, 0);
+
         for _ in 0..self.centroids.len() {
-            new_centorids.push(Vector::new(self.get_zero_vec().clone()));
+            new_centorids.push(Vector::empty(self.vector_length));
             new_inertia_distance.push(0.0);
         }
 
-        for (key, vectors) in clustered_data_pints.clone().into_iter() {
+        for (key, vectors) in clustered_data_pints.into_iter() {
             let clustered_size = vectors.len();
             // TODO: Should be possible to initialize a zero vector based on another vec
-            let zero_vec = self.get_zero_vec().clone();
-            let mut delta_vector: Vector = Vector::new(zero_vec);
+            let mut delta_vector = Vector::empty(self.vector_length);
             for vector in vectors {
                 delta_vector = delta_vector.add(vector).unwrap();
             }
-            delta_vector = delta_vector.div_constant(clustered_size as f64).clone();
-
-            new_centorids[key] = delta_vector.clone();
-            new_inertia_distance[key] += delta_vector.clone().sum_d1();
+            delta_vector = delta_vector.div_constant(clustered_size as f64);
+            let sum = delta_vector.sum_d1();
+            new_centorids[key] = delta_vector;
+            new_inertia_distance[key] += sum;
         }
 
         self.centroids = new_centorids;
@@ -154,19 +154,5 @@ impl Kmeans {
         }
 
         clustered_data_pints
-    }
-
-    pub fn get_zero_vec(&self) -> Vec<f64> {
-        let zero_vec = vec![0.0; self.vector_length];
-        zero_vec
-    }
-
-    pub fn get_random_vec(&self) -> Vec<f64> {
-        let mut rng = rand::thread_rng();
-        let mut zero_vec = Vec::new();
-        for _ in 0..self.vector_length {
-            zero_vec.push(rng.gen());
-        }
-        zero_vec
     }
 }
