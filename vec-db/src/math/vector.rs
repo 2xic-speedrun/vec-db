@@ -1,5 +1,6 @@
 use std::fmt;
 
+use anyhow::{Result, bail};
 use rand::Rng;
 
 #[derive(Clone)]
@@ -29,9 +30,9 @@ impl Vector {
         Vector::new(zero_vec)
     }
 
-    pub fn l2_distance(&self, other: &Vector) -> Option<f64> {
+    pub fn l2_distance(&self, other: &Vector) -> Result<f64> {
         if self.len() != other.len() {
-            panic!(
+            bail!(
                 "Vector sizes does not match, {} != {}",
                 self.len(),
                 other.len()
@@ -46,12 +47,12 @@ impl Vector {
             }
         }
 
-        Some(distance.sqrt())
+        Ok(distance.sqrt())
     }
 
-    pub fn subtract(&self, other: Vector) -> Option<Vector> {
+    pub fn subtract(&self, other: Vector) -> Result<Vector> {
         if self.len() != other.len() {
-            panic!(
+            bail!(
                 "Vector sizes does not match, {} != {}",
                 self.len(),
                 other.len()
@@ -66,12 +67,12 @@ impl Vector {
             }
         }
 
-        Some(Vector { vector: vec })
+        Ok(Vector { vector: vec })
     }
 
-    pub fn add(&self, other: &Vector) -> Option<Vector> {
+    pub fn add(&self, other: &Vector) -> Result<Vector> {
         if self.len() != other.len() {
-            panic!(
+            bail!(
                 "Vector sizes does not match, {} != {}",
                 self.len(),
                 other.len()
@@ -87,7 +88,7 @@ impl Vector {
             }
         }
 
-        Some(Vector { vector: vec })
+        Ok(Vector { vector: vec })
     }
 
     pub fn mul_constant(&self, constant: f64) -> Vector {
