@@ -42,9 +42,23 @@ impl Kmeans {
 
     pub fn fit(&mut self, iterations: i64) {
         let mut previous_run = self.inertia_distance_centroids.clone();
+        let mut previous_centroids = self.centroids.clone();
+        const CONVERGENCE_THRESHOLD: f64 = 1e-6;
 
         for _ in 0..iterations {
             self.forward();
+
+            // Check for convergence
+            let mut total_movement = 0.0;
+            for (new_centroid, old_centroid) in self.centroids.iter().zip(&previous_centroids) {
+                total_movement += new_centroid.l2_distance(old_centroid).unwrap_or(0.0);
+            }
+
+            if total_movement < CONVERGENCE_THRESHOLD {
+                break;
+            }
+
+            previous_centroids = self.centroids.clone();
 
             // Check if more centroids need to be added
             if self.fit_index > 0 && self.fit_index % (75 * (self.centroids().len() as i64)) == 0 {
@@ -78,7 +92,7 @@ impl Kmeans {
         let mut best_score = f64::INFINITY;
         let mut best_index: usize = 0;
         for (index, centroid) in self.centroids.iter().enumerate() {
-            let distance = centroid.l2_distance(data_point).unwrap();
+            let distance = centroid.l2_distance_squared(data_point).unwrap();
 
             if distance < best_score {
                 best_score = distance;
@@ -109,30 +123,29 @@ impl Kmeans {
     }
 
     fn forward(&mut self) {
-        let clustered_data_pints = self.get_centroids_data_point();
-        let mut new_centorids = Vec::with_capacity(self.centroids.len() + 1);
-        let mut new_inertia_distance: Vec<f64> = Vec::with_capacity(self.centroids.len() + 1);
-        debug_assert_ne!(self.vector_length, 0);
+        let mut assignments = Vec::with_capacity(self.dataset.len());
 
-        for _ in 0..self.centroids.len() {
-            new_centorids.push(Vector::empty(self.vector_length));
-            new_inertia_distance.push(0.0);
+        for data_point in &self.dataset {
+            assignments.push(self.find_closest_centroid(data_point));
         }
 
-        for (key, vectors) in clustered_data_pints.into_iter() {
-            let clustered_size = vectors.len();
-            // TODO: Should be possible to initialize a zero vector based on another vec
-            let mut delta_vector = Vector::empty(self.vector_length);
-            for vector in vectors {
-                delta_vector = delta_vector.add(vector).unwrap();
+        let mut new_centroids = vec![Vector::empty(self.vector_length); self.centroids.len()];
+        let mut cluster_counts = vec![0; self.centroids.len()];
+        let mut new_inertia_distance = vec![0.0; self.centroids.len()];
+
+        for (data_point, &cluster_id) in self.dataset.iter().zip(&assignments) {
+            new_centroids[cluster_id].add_inplace(data_point).unwrap();
+            cluster_counts[cluster_id] += 1;
+        }
+
+        for (i, &count) in cluster_counts.iter().enumerate() {
+            if count > 0 {
+                new_centroids[i] = new_centroids[i].div_constant(count as f64);
+                new_inertia_distance[i] = new_centroids[i].sum_d1();
             }
-            delta_vector = delta_vector.div_constant(clustered_size as f64);
-            let sum = delta_vector.sum_d1();
-            new_centorids[key] = delta_vector;
-            new_inertia_distance[key] += sum;
         }
 
-        self.centroids = new_centorids;
+        self.centroids = new_centroids;
         self.inertia_distance_centroids = new_inertia_distance;
     }
 

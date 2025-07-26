@@ -6,7 +6,7 @@ pub mod math;
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_should_give_distance_between_vectors() {
+    fn it_should_give_distance_between_vectors() -> anyhow::Result<()> {
         use crate::math::vector::Vector;
 
         let vec_a: Vec<f64> = vec![1.0, 1.0];
@@ -17,12 +17,13 @@ mod tests {
         let b = Vector::new(vec_b);
         let c = Vector::new(vec_c);
 
-        let subtracted_vector = a.subtract(b).unwrap();
+        let subtracted_vector = a.subtract(b)?;
         assert!(subtracted_vector.equal(&c));
+        Ok(())
     }
 
     #[test]
-    fn it_should_report_l2_distance() {
+    fn it_should_report_l2_distance() -> anyhow::Result<()> {
         use crate::math::vector::Vector;
 
         let vec_a: Vec<f64> = vec![1.0, 1.0];
@@ -33,11 +34,12 @@ mod tests {
         let b = Vector::new(vec_b);
         let c = Vector::new(vec_c);
 
-        let subtracted_vector = a.l2_distance(&b).unwrap();
+        let subtracted_vector = a.l2_distance(&b)?;
         assert_eq!(subtracted_vector, 0.0);
 
-        let subtracted_vector = a.l2_distance(&c).unwrap();
+        let subtracted_vector = a.l2_distance(&c)?;
         assert_eq!(subtracted_vector, (2.0_f64).sqrt());
+        Ok(())
     }
 
     #[test]

@@ -19,20 +19,18 @@ impl SimpleDatabase {
     }
 
     pub fn insert(&mut self, vector: Vector) {
-        /*
-         * Save the vector into k-means ?
-         * We provide 100 vector sampling -> for each centroid
-         * K-means only add new cluster at 100 nodes in a centroid ?
-         * -> Means we split the rest into a separate file
-         */
         let len = vector.len();
         self.kmeans.add_datapoint(vector);
         if self.kmeans.centroids().is_empty() {
             self.kmeans.add_centroid(Vector::rand(len));
         }
 
-        // Why is there no more centroids added ?
-        self.kmeans.fit(30);
+        let dataset_size = self.kmeans.dataset().len();
+        if dataset_size % 100 == 0 {
+            self.kmeans.fit(10);
+        } else {
+            self.kmeans.fit(1);
+        }
     }
 
     pub fn query(&mut self, vector: Vector, n: usize) -> Vec<Vec<f64>> {

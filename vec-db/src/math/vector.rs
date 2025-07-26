@@ -1,6 +1,6 @@
 use std::fmt;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use rand::Rng;
 
 #[derive(Clone)]
@@ -14,11 +14,7 @@ impl Vector {
     }
 
     pub fn empty(size: usize) -> Vector {
-        let mut vec: Vec<f64> = Vec::with_capacity(size);
-        for idx in 0..size {
-            vec.insert(idx, 0.0);
-        }
-        Vector::new(vec)
+        Vector::new(vec![0.0; size])
     }
 
     pub fn rand(size: usize) -> Vector {
@@ -31,6 +27,10 @@ impl Vector {
     }
 
     pub fn l2_distance(&self, other: &Vector) -> Result<f64> {
+        Ok(self.l2_distance_squared(other)?.sqrt())
+    }
+
+    pub fn l2_distance_squared(&self, other: &Vector) -> Result<f64> {
         if self.len() != other.len() {
             bail!(
                 "Vector sizes does not match, {} != {}",
@@ -41,13 +41,11 @@ impl Vector {
 
         let mut distance: f64 = 0.0;
         for i in 0..self.len() {
-            let other_value = other.get(i);
-            if let Some(other_value) = other_value {
-                distance += (self.vector[i] - other_value).powf(2.0);
-            }
+            let diff = self.vector[i] - other.vector[i];
+            distance += diff * diff;
         }
 
-        Ok(distance.sqrt())
+        Ok(distance)
     }
 
     pub fn subtract(&self, other: Vector) -> Result<Vector> {
@@ -79,25 +77,32 @@ impl Vector {
             );
         }
 
-        let mut vec = self.vector.clone();
-
-        for (i, _item) in vec.clone().iter().enumerate().take(self.len()) {
-            let other_value = other.get(i);
-            if let Some(other_value) = other_value {
-                vec[i] += other_value;
-            }
+        let mut vec = Vec::with_capacity(self.len());
+        for i in 0..self.len() {
+            vec.push(self.vector[i] + other.vector[i]);
         }
 
         Ok(Vector { vector: vec })
     }
 
-    pub fn mul_constant(&self, constant: f64) -> Vector {
-        let mut vec = self.vector.clone();
-
-        for (i, _item) in vec.clone().iter().enumerate().take(self.len()) {
-            vec[i] *= constant;
+    pub fn add_inplace(&mut self, other: &Vector) -> Result<()> {
+        if self.len() != other.len() {
+            bail!(
+                "Vector sizes does not match, {} != {}",
+                self.len(),
+                other.len()
+            );
         }
 
+        for i in 0..self.len() {
+            self.vector[i] += other.vector[i];
+        }
+
+        Ok(())
+    }
+
+    pub fn mul_constant(&self, constant: f64) -> Vector {
+        let vec: Vec<f64> = self.vector.iter().map(|&x| x * constant).collect();
         Vector { vector: vec }
     }
 
@@ -106,12 +111,7 @@ impl Vector {
     }
 
     pub fn abs(&self) -> Vector {
-        let mut vec = self.vector.clone();
-
-        for (i, item) in vec.clone().iter().enumerate().take(self.len()) {
-            vec[i] = item.abs()
-        }
-
+        let vec: Vec<f64> = self.vector.iter().map(|&x| x.abs()).collect();
         Vector { vector: vec }
     }
 
