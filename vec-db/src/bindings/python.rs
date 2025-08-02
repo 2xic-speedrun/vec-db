@@ -1,5 +1,6 @@
 use crate::clustering::kmeans::Kmeans;
 use crate::math::vector::Vector;
+use anyhow::Result;
 use pyo3::prelude::*;
 
 #[pyclass]
@@ -35,20 +36,36 @@ impl PyKmeans {
         self.kmeans.add_centroid(Vector::new(vec));
     }
 
-    fn get_centroid(&mut self, loc: usize) -> Vec<f64> {
-        let vec = self.kmeans.centroids().get(loc).unwrap().raw();
-        let mut new_vec: Vec<f64> = Vec::new();
-        for i in 0..vec.len() {
-            new_vec.push(*vec.get(i).unwrap());
-        }
-        new_vec
+    fn get_centroid(&mut self, loc: usize) -> PyResult<Vec<f64>> {
+        self.get_centroid_impl(loc)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
     fn add_datapoint(&mut self, vec: Vec<f64>) {
         self.kmeans.add_datapoint(Vector::new(vec));
     }
 
-    fn fit(&mut self, iterations: i64) {
-        self.kmeans.fit(iterations);
+    fn fit(&mut self, iterations: u64) -> PyResult<()> {
+        self.kmeans
+            .fit(iterations)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+}
+
+impl PyKmeans {
+    fn get_centroid_impl(&self, loc: usize) -> Result<Vec<f64>> {
+        let centroids = self.kmeans.centroids();
+        let vec = centroids
+            .get(loc)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Centroid index {} out of bounds (have {})",
+                    loc,
+                    centroids.len()
+                )
+            })?
+            .raw();
+
+        Ok(vec.clone())
     }
 }

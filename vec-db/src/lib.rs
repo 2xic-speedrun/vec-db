@@ -43,7 +43,7 @@ mod tests {
     }
 
     #[test]
-    fn it_should_be_able_to_fit_kmeans() {
+    fn it_should_be_able_to_fit_kmeans() -> anyhow::Result<()> {
         use crate::clustering::kmeans::Kmeans;
         use crate::math::vector::Vector;
 
@@ -64,11 +64,13 @@ mod tests {
         kmeans.add_centroid(base_centroid.mul_constant(-300.0));
         kmeans.add_centroid(base_centroid.mul_constant(500.0));
 
-        kmeans.fit(2);
+        kmeans.fit(2)?;
 
         let centroids = kmeans.centroids();
         assert!(!centroids[0].equal(&base_centroid.mul_constant(-3.0)));
         assert!(!centroids[1].equal(&base_centroid.mul_constant(5.0)));
+
+        Ok(())
     }
 }
 

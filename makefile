@@ -12,10 +12,16 @@ python_test_kmeans: build
 python_test_stream: build
 	cd python-examples/vector-db && python3 test_query.py
 
-test: 
+test: build
 	pytest tests/
 	cd vec-db && cargo test 
 
 lint:
 	cd vec-db && cargo fmt
 	cd vec-db && cargo clippy
+	
+lint-fix:
+	cd vec-db && cargo clippy --fix  --allow-dirty --all-targets --all-features -- -D warnings -W unused-crate-dependencies
+
+check:
+	cd vec-db && cargo check --all-targets --profile=test

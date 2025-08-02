@@ -16,15 +16,19 @@ impl PyDatabase {
         }
     }
 
-    fn insert(&mut self, vec: Vec<f64>) {
-        self.database.insert(Vector::new(vec));
+    fn insert(&mut self, vec: Vec<f64>) -> PyResult<()> {
+        self.database
+            .insert(Vector::new(vec))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
     fn centroids(&mut self) -> Vec<Vec<f64>> {
         self.database.centrodis()
     }
 
-    fn query(&mut self, vec: Vec<f64>, n: usize) -> Vec<Vec<f64>> {
-        self.database.query(Vector::new(vec), n)
+    fn query(&mut self, vec: Vec<f64>, n: usize) -> PyResult<Vec<Vec<f64>>> {
+        self.database
+            .query(Vector::new(vec), n)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 }

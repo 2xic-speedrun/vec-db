@@ -1,11 +1,17 @@
+use std::cell::Cell;
 use std::fmt;
 
 use anyhow::{bail, Result};
-use rand::Rng;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
 #[derive(Clone)]
 pub struct Vector {
     vector: Vec<f64>,
+}
+
+thread_local! {
+    static COUNTER: Cell<u64> = const { Cell::new(0) };
 }
 
 impl Vector {
@@ -18,7 +24,14 @@ impl Vector {
     }
 
     pub fn rand(size: usize) -> Vector {
-        let mut rng = rand::thread_rng();
+        let call_count = COUNTER.with(|c| {
+            let val = c.get();
+            c.set(val + 1);
+            val
+        });
+        let seed = 42 * call_count;
+
+        let mut rng = StdRng::seed_from_u64(seed);
         let mut zero_vec = Vec::new();
         for _ in 0..size {
             zero_vec.push(rng.gen());
