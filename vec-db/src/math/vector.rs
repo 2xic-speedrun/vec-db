@@ -1,14 +1,29 @@
 use std::cell::Cell;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use anyhow::{bail, Result};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Vector {
     vector: Vec<f64>,
 }
+
+impl Hash for Vector {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash the length first
+        self.vector.len().hash(state);
+
+        // Hash each f64 as bytes
+        for &value in &self.vector {
+            value.to_bits().hash(state); // Convert f64 to u64 bits
+        }
+    }
+}
+
+impl Eq for Vector {}
 
 thread_local! {
     static COUNTER: Cell<u64> = const { Cell::new(0) };
@@ -181,6 +196,10 @@ impl Vector {
             value += i;
         }
         value
+    }
+
+    pub fn as_vec(self) -> Vec<f64> {
+        return self.vector.clone();
     }
 }
 
