@@ -1,4 +1,7 @@
 target
 *.pyc
 *.raw
-libvec_db.so
+*.so
+libvec_db.
+__pycache__
+dataset

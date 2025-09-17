@@ -1,6 +1,5 @@
+pub mod backends;
 pub mod bindings;
-pub mod clustering;
-pub mod db;
 pub mod math;
 
 #[cfg(test)]
@@ -44,7 +43,7 @@ mod tests {
 
     #[test]
     fn it_should_be_able_to_fit_kmeans() -> anyhow::Result<()> {
-        use crate::clustering::kmeans::Kmeans;
+        use crate::backends::kmeans::Kmeans;
         use crate::math::vector::Vector;
 
         let vec_a: Vec<f64> = vec![1.0, 1.0];

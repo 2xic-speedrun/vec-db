@@ -9,7 +9,7 @@ def test_similarity_quality():
     cluster1 = np.random.normal([0, 0], 1, (50, 2))
     cluster2 = np.random.normal([10, 10], 1, (50, 2))
 
-    db = PyDatabase(vector_size=2)
+    db = PyDatabase.with_kmeans_backend(vector_size=2)
 
     # Insert both clusters
     for vector in np.vstack([cluster1, cluster2]):
@@ -40,7 +40,7 @@ def test_performance_scaling(size):
 
     centers = np.random.RandomState(42).rand(5, size)
     X, _ = make_blobs(n_samples=size, n_features=size, centers=centers, random_state=42)
-    db = PyDatabase(vector_size=size)
+    db = PyDatabase.with_kmeans_backend(vector_size=size)
 
     # Time insertions
     start = time.time()
@@ -63,7 +63,7 @@ def test_performance_scaling(size):
 
 def test_empty_database():
     """Test behavior with empty database."""
-    db = PyDatabase(vector_size=10)
+    db = PyDatabase.with_kmeans_backend(vector_size=10)
 
     query = [1.0] * 10
     results = db.query(query, 5)

@@ -1,4 +1,4 @@
-use crate::clustering::kmeans::Kmeans;
+use crate::backends::kmeans::Kmeans;
 use crate::math::vector::Vector;
 use anyhow::Result;
 use pyo3::prelude::*;
