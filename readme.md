@@ -14,3 +14,7 @@ These are also good resources
 - [Everything You Need to Know about Vector Index Basics](https://zilliz.com/learn/vector-index)
 - [Nearest Neighbor Indexes: What Are IVFFlat Indexes in Pgvector and How Do They Work](https://www.timescale.com/blog/nearest-neighbor-indexes-what-are-ivfflat-indexes-in-pgvector-and-how-do-they-work/) 
 - [Vector Search Explained](https://weaviate.io/blog/vector-search-explained)
+
+## Other good blog posts
+- [How we built a web-scale vector database](https://exa.ai/blog/building-web-scale-vector-db)
+- 

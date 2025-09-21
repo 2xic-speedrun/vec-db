@@ -73,8 +73,8 @@ impl MinHash {
         set
     }
 
-    fn signature(&self, entry: &Vec<f64>) -> Vec<u32> {
-        let bytes = self.float64_to_bytes(&entry);
+    fn signature(&self, entry: &[f64]) -> Vec<u32> {
+        let bytes = self.float64_to_bytes(entry);
         let shingles = self.get_byte_shingles(&bytes, 8);
         self.min_hash(&shingles)
     }
@@ -82,13 +82,12 @@ impl MinHash {
     fn get_bucket_key(&self, entry: Vec<f64>) -> Vec<String> {
         let signature = self.signature(&entry);
 
-        //        let mut buckets: Vec<String> = Vec::with_capacity(self.num_bands as usize);
         let mut buckets = vec![String::new(); self.num_bands as usize];
         for band in 0..self.num_bands {
             let start_idx = (band as usize) * (self.rows_per_band as usize);
             let end_idx = start_idx + (self.rows_per_band as usize);
             let band_signature = signature[start_idx..end_idx].to_vec();
-            let bucket_key = format!("minhash_{band}_{band_signature:?}");
+            let bucket_key = format!("{band}_{band_signature:?}");
             buckets[band as usize] = bucket_key;
         }
         buckets
@@ -123,10 +122,8 @@ impl MinHashDb {
 
     pub fn insert(&mut self, vec: Vec<f64>) -> anyhow::Result<()> {
         for bucket_key in self.min_hash.get_bucket_key(vec.clone()) {
-            self.buckets
-                .entry(bucket_key)
-                .or_default()
-                .insert(Vector::new(vec.clone()));
+            let entry = self.buckets.entry(bucket_key);
+            entry.or_default().insert(Vector::new(vec.clone()));
         }
         Ok(())
     }

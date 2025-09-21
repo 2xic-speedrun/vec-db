@@ -49,7 +49,7 @@ mod tests {
         let vec_a: Vec<f64> = vec![1.0, 1.0];
         let a = Vector::new(vec_a);
 
-        let mut kmeans = Kmeans::new(2);
+        let mut kmeans = Kmeans::new(2, None);
         kmeans.add_datapoint(a.mul_constant(-500.0));
         kmeans.add_datapoint(a.mul_constant(-440.0));
 

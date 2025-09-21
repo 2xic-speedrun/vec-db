@@ -1,6 +1,12 @@
 use crate::math::vector::Vector;
 use anyhow::Result;
-use std::{cmp::min, collections::HashMap};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
+use std::{
+    cmp::min,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 pub struct Kmeans {
     centroids: Vec<Vector>,
@@ -8,6 +14,7 @@ pub struct Kmeans {
     dataset: Vec<Vector>,
     vector_length: usize,
     fit_index: i64,
+    rng: Arc<Mutex<ChaCha8Rng>>,
 }
 
 struct ClusterStats {
@@ -17,13 +24,20 @@ struct ClusterStats {
 }
 
 impl Kmeans {
-    pub fn new(vector_length: usize) -> Kmeans {
+    pub fn new(vector_length: usize, rng: Option<Arc<Mutex<ChaCha8Rng>>>) -> Kmeans {
+        let rng_seed = 12345u64;
+        let rng = rng.unwrap_or_else(|| Arc::new(Mutex::new(ChaCha8Rng::seed_from_u64(rng_seed))));
+
         Kmeans {
             dataset: Vec::new(),
-            centroids: vec![Vector::rand(vector_length), Vector::rand(vector_length)],
+            centroids: vec![
+                Vector::rand(vector_length, &rng),
+                Vector::rand(vector_length, &rng),
+            ],
             inertia_distance_centroids: Vec::new(),
             vector_length,
             fit_index: 0,
+            rng,
         }
     }
 
@@ -62,7 +76,7 @@ impl Kmeans {
             previous_centroids = self.centroids.clone();
 
             if self.fit_index > 0 && self.should_add_centroid()? {
-                self.add_centroid(Vector::rand(self.vector_length));
+                self.add_centroid(Vector::rand(self.vector_length, &self.rng));
             }
             self.fit_index += 1
         }
@@ -272,12 +286,17 @@ impl Kmeans {
 
 pub struct KmeansDb {
     pub kmeans: Kmeans,
+    rng: Arc<Mutex<ChaCha8Rng>>,
 }
 
 impl KmeansDb {
     pub fn new(vector_length: usize) -> Self {
+        let rng_seed = 12345u64;
+        let rng = Arc::new(Mutex::new(ChaCha8Rng::seed_from_u64(rng_seed)));
+
         KmeansDb {
-            kmeans: Kmeans::new(vector_length),
+            kmeans: Kmeans::new(vector_length, Some(rng.clone())),
+            rng,
         }
     }
 
@@ -285,7 +304,7 @@ impl KmeansDb {
         let len = vector.len();
         self.kmeans.add_datapoint(vector);
         if self.kmeans.centroids().is_empty() {
-            self.kmeans.add_centroid(Vector::rand(len));
+            self.kmeans.add_centroid(Vector::rand(len, &self.rng));
         }
 
         let dataset_size = self.kmeans.dataset().len();
@@ -326,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_centroid_addition_with_dispersed_clusters() -> Result<()> {
-        let mut kmeans = Kmeans::new(2);
+        let mut kmeans = Kmeans::new(2, None);
 
         for i in 0..20 {
             let noise = (i as f64 - 10.0) * 2.0; // High variance: -20 to 18
@@ -354,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_centroid_addition_with_large_clusters() -> Result<()> {
-        let mut kmeans = Kmeans::new(3);
+        let mut kmeans = Kmeans::new(3, None);
 
         for i in 0..50 {
             let x = (i % 10) as f64 - 5.0;
@@ -388,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_centroid_addition_with_natural_clusters() -> Result<()> {
-        let mut kmeans = Kmeans::new(4);
+        let mut kmeans = Kmeans::new(4, None);
 
         let cluster_centers = [
             vec![0.0, 0.0, 0.0, 0.0],
@@ -435,7 +454,7 @@ mod tests {
 
     #[test]
     fn test_no_centroid_addition_for_good_clusters() -> Result<()> {
-        let mut kmeans = Kmeans::new(2);
+        let mut kmeans = Kmeans::new(2, None);
 
         for i in 0..15 {
             let small_noise = (i as f64 - 7.5) * 0.2; // Very small variance
@@ -463,7 +482,7 @@ mod tests {
 
     #[test]
     fn test_centroid_addition_timing() -> Result<()> {
-        let mut kmeans = Kmeans::new(2);
+        let mut kmeans = Kmeans::new(2, None);
         let mut centroid_changes = Vec::new();
 
         for batch in 0..10 {

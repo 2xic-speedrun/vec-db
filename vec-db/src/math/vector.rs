@@ -1,10 +1,11 @@
 use std::cell::Cell;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Result};
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
+use rand_chacha::ChaCha8Rng;
 
 #[derive(Clone, PartialEq)]
 pub struct Vector {
@@ -29,6 +30,7 @@ thread_local! {
     static COUNTER: Cell<u64> = const { Cell::new(0) };
 }
 
+// TODO: support binary quantization
 impl Vector {
     pub fn new(vec: Vec<f64>) -> Vector {
         Vector { vector: vec }
@@ -38,18 +40,14 @@ impl Vector {
         Vector::new(vec![0.0; size])
     }
 
-    pub fn rand(size: usize) -> Vector {
-        let call_count = COUNTER.with(|c| {
-            let val = c.get();
-            c.set(val + 1);
-            val
-        });
-        let seed = 42 * call_count;
-
-        let mut rng = StdRng::seed_from_u64(seed);
+    pub fn rand(size: usize, rng: &Arc<Mutex<ChaCha8Rng>>) -> Vector {
         let mut zero_vec = Vec::new();
         for _ in 0..size {
-            zero_vec.push(rng.gen());
+            let random_val = {
+                let mut rng_guard = rng.lock().unwrap();
+                rng_guard.random::<f64>()
+            };
+            zero_vec.push(random_val);
         }
         Vector::new(zero_vec)
     }
@@ -74,6 +72,45 @@ impl Vector {
         }
 
         Ok(distance)
+    }
+
+    pub fn norm(&mut self) -> Self {
+        let norm: f64 = self.vector.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if norm > 0.0 {
+            for x in &mut self.vector {
+                *x /= norm;
+            }
+        }
+        self.clone()
+    }
+
+    pub fn l1_dot(&self, other: &Vector) -> Result<f64> {
+        if self.len() != other.len() {
+            bail!(
+                "Vector sizes does not match, {} != {}",
+                self.len(),
+                other.len()
+            );
+        }
+        let results = self
+            .vector
+            .iter()
+            .zip(other.vector.iter())
+            .map(|(x, y)| x * y)
+            .sum();
+        Ok(results)
+    }
+
+    pub fn cosine_similarity(&self, b: &Vector) -> Result<f64> {
+        let dot = self.l1_dot(b)?;
+        let norm_a: f64 = self.vector.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let norm_b: f64 = b.vector.iter().map(|x| x * x).sum::<f64>().sqrt();
+
+        if norm_a == 0.0 || norm_b == 0.0 {
+            Ok(0.0)
+        } else {
+            Ok(dot / (norm_a * norm_b))
+        }
     }
 
     pub fn subtract(&self, other: Vector) -> Result<Vector> {
@@ -199,7 +236,7 @@ impl Vector {
     }
 
     pub fn as_vec(self) -> Vec<f64> {
-        return self.vector.clone();
+        self.vector.clone()
     }
 }
 

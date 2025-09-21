@@ -28,7 +28,7 @@ impl PyKmeans {
     #[new]
     fn new(shape: usize) -> PyKmeans {
         PyKmeans {
-            kmeans: Kmeans::new(shape),
+            kmeans: Kmeans::new(shape, None),
         }
     }
 
