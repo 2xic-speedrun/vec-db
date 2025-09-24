@@ -1,4 +1,4 @@
-# Simple vector database
+$$# Simple vector database
 **This is a simple in-memory vector database. Not for use in production.**
 
 This is just a basic vector database that uses k-means to reduce the number of vector lookups. See links below for more advanced indexing methods that will help with speedups. 
@@ -17,4 +17,5 @@ These are also good resources
 
 ## Other good blog posts
 - [How we built a web-scale vector database](https://exa.ai/blog/building-web-scale-vector-db)
+- [Vector Database Basics: HNSW](https://www.tigerdata.com/blog/vector-database-basics-hnsw)
 - 

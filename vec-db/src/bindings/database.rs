@@ -1,5 +1,5 @@
 use crate::{
-    backends::{kmeans::KmeansDb, lsh_hash::LshDB, min_hash::MinHashDb, Backends},
+    backends::{hnsw::HnswDB, kmeans::KmeansDb, lsh_hash::LshDB, min_hash::MinHashDb, Backends},
     math::vector::Vector,
 };
 use pyo3::{prelude::*, types::PyType};
@@ -52,11 +52,19 @@ impl PyDatabase {
         })
     }
 
+    #[classmethod]
+    fn with_hnsw(_cls: &PyType, similarity_threshold: f64) -> PyResult<Self> {
+        Ok(PyDatabase {
+            database: Backends::HNSW(HnswDB::new(256, similarity_threshold)),
+        })
+    }
+
     fn insert(&mut self, vec: Vec<f64>) -> PyResult<()> {
         let results = match &mut self.database {
             Backends::Kmenas(backend) => backend.insert(Vector::new(vec)),
             Backends::MinHash(backend) => backend.insert(vec),
             Backends::LSH(lsh_db) => lsh_db.insert(vec),
+            Backends::HNSW(hnsw_db) => hnsw_db.insert(Vector::new(vec)),
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
@@ -66,6 +74,7 @@ impl PyDatabase {
             Backends::Kmenas(backend) => backend.query(Vector::new(vec), n),
             Backends::MinHash(backend) => backend.query(vec, n),
             Backends::LSH(lsh_db) => lsh_db.query(vec, n),
+            Backends::HNSW(hnsw_db) => hnsw_db.query(Vector::new(vec), n),
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }

@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Vector {
     vector: Vec<f64>,
 }
@@ -250,5 +250,31 @@ impl fmt::Display for Vector {
             write!(f, "{i}")?;
         }
         write!(f, "]")
+    }
+}
+
+impl From<Vec<f64>> for Vector {
+    fn from(value: Vec<f64>) -> Self {
+        Vector::new(value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::math::vector::Vector;
+
+    #[test]
+    fn test_cosine_similarity() {
+        let vec1 = Vector::new(vec![1.0, 0.0, 0.0]);
+        let vec2 = Vector::new(vec![0.0, 1.0, 0.0]);
+        let vec3 = Vector::new(vec![1.0, 1.0, 0.0]);
+        let vec4 = Vector::new(vec![2.0, 0.0, 0.0]);
+
+        assert!(((vec1.cosine_similarity(&vec2)).expect("Bad cosine") - 0.0).abs() < 1e-10);
+        assert!(((vec1.cosine_similarity(&vec4)).expect("Bad cosine") - 1.0).abs() < 1e-10);
+        assert!(
+            ((vec1.cosine_similarity(&vec3)).expect("Bad cosine") - (1.0 / 2.0_f64.sqrt())).abs()
+                < 1e-10
+        );
     }
 }

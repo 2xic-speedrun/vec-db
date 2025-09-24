@@ -172,7 +172,7 @@ mod tests {
     use super::*;
 
     fn create_test_db() -> LshDB {
-        LshDB::new(64, 16, 5, 0.8) // Much more reasonable threshold!
+        LshDB::new(64, 16, 5, 0.8)
     }
 
     #[test]
@@ -199,20 +199,5 @@ mod tests {
 
         let results = db.query(vec4.clone(), 5).expect("Should get results");
         assert_eq!(results.len(), 0);
-    }
-
-    #[test]
-    fn test_cosine_similarity() {
-        let vec1 = Vector::new(vec![1.0, 0.0, 0.0]);
-        let vec2 = Vector::new(vec![0.0, 1.0, 0.0]);
-        let vec3 = Vector::new(vec![1.0, 1.0, 0.0]);
-        let vec4 = Vector::new(vec![2.0, 0.0, 0.0]);
-
-        assert!(((vec1.cosine_similarity(&vec2)).expect("Bad cosine") - 0.0).abs() < 1e-10);
-        assert!(((vec1.cosine_similarity(&vec4)).expect("Bad cosine") - 1.0).abs() < 1e-10);
-        assert!(
-            ((vec1.cosine_similarity(&vec3)).expect("Bad cosine") - (1.0 / 2.0_f64.sqrt())).abs()
-                < 1e-10
-        );
     }
 }
