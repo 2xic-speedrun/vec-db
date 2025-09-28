@@ -64,7 +64,7 @@ impl PyKmeans {
                     centroids.len()
                 )
             })?
-            .raw();
+            .as_vec_ref();
 
         Ok(vec.clone())
     }

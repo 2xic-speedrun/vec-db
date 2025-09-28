@@ -17,22 +17,25 @@ struct Candidate {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct VectorCandidate {
+struct VectorCandidate<'a> {
     candidate: Candidate,
-    vector: Vector,
+    vector: &'a Vector,
 }
 
 impl Eq for Candidate {}
 
 impl PartialOrd for Candidate {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        other.distance.partial_cmp(&self.distance)
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        match other.distance.partial_cmp(&self.distance) {
+            Some(ordering) => ordering,
+            None => std::cmp::Ordering::Equal,
+        }
     }
 }
 
@@ -54,7 +57,7 @@ impl HnswDB {
     pub fn insert(&mut self, vector: Vector) -> anyhow::Result<()> {
         let node_id = self.nodes.len();
 
-        let closest_results = self.search(vector.clone(), self.max_connections * 2, None)?;
+        let closest_results = self.search(&vector, self.max_connections * 2, None)?;
         let candidates: Vec<Candidate> = closest_results
             .iter()
             .map(|f| f.candidate.clone())
@@ -65,13 +68,11 @@ impl HnswDB {
             .map(|c| c.node_id)
             .collect();
 
-        let new_node = Node {
-            vector,
-            neighbors: neighbors.clone(),
-        };
+        let new_node = Node { vector, neighbors };
         self.nodes.push(new_node);
 
         // TODO: pruning?
+        // This also isn't fully correct with the algorithm
         let num_to_connect = self.nodes.len().saturating_sub(1).min(self.max_connections);
         for i in 0..num_to_connect {
             self.nodes[node_id].neighbors.push(i);
@@ -82,7 +83,7 @@ impl HnswDB {
     }
 
     pub fn query(&self, query: Vector, k: usize) -> anyhow::Result<Vec<Vec<f64>>> {
-        let results = self.search(query, k, Some(self.similarity_threshold))?;
+        let results = self.search(&query, k, Some(self.similarity_threshold))?;
         let vector_results = results.iter().map(|f| f.vector.clone().as_vec()).collect();
 
         Ok(vector_results)
@@ -90,7 +91,7 @@ impl HnswDB {
 
     fn search(
         &self,
-        query: Vector,
+        query: &Vector,
         k: usize,
         similarity_threshold: Option<f64>,
     ) -> anyhow::Result<Vec<VectorCandidate>> {
@@ -114,7 +115,7 @@ impl HnswDB {
         while let Some(current) = candidates.pop() {
             let candidate = &self.nodes[current.node_id].vector;
             let is_okay = match similarity_threshold {
-                Some(value) => value <= candidate.cosine_similarity(&query)?,
+                Some(value) => value <= candidate.cosine_similarity(query)?,
                 None => true,
             };
             if is_okay && !query.equal(candidate) {
@@ -123,7 +124,7 @@ impl HnswDB {
                         node_id: current.node_id,
                         distance: current.distance,
                     },
-                    vector: candidate.clone(),
+                    vector: candidate,
                 });
             }
 

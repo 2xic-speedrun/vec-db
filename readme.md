@@ -18,4 +18,12 @@ These are also good resources
 ## Other good blog posts
 - [How we built a web-scale vector database](https://exa.ai/blog/building-web-scale-vector-db)
 - [Vector Database Basics: HNSW](https://www.tigerdata.com/blog/vector-database-basics-hnsw)
+- [Building a high recall vector database serving 1 billion embeddings from a single machine](https://blog.wilsonl.in/corenn/)
+
+## Other algorithms
+There are many other algorithms, check the [ann-benchmark](https://ann-benchmarks.com/index.html)
+- [faiss-ivf](https://medium.com/@Jawabreh0/inverted-file-indexing-ivf-in-faiss-a-comprehensive-guide-c183fe979d20)
+- [annoy](https://github.com/spotify/annoy)
+- [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.pdf)
+- [ScaNN](https://research.google/blog/announcing-scann-efficient-vector-similarity-search/)
 - 

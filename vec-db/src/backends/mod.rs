@@ -1,4 +1,9 @@
-use crate::backends::{hnsw::HnswDB, kmeans::KmeansDb, lsh_hash::LshDB, min_hash::MinHashDb};
+use crate::backends::{
+    hnsw::HnswDB,
+    kmeans::KmeansDb,
+    lsh_hash::{InMemoryBucket, LshDB, RocksDbBucket},
+    min_hash::MinHashDb,
+};
 
 pub mod hnsw;
 pub mod kmeans;
@@ -8,6 +13,7 @@ pub mod min_hash;
 pub enum Backends {
     Kmenas(KmeansDb),
     MinHash(MinHashDb),
-    LSH(LshDB),
+    LSH(LshDB<InMemoryBucket>),
+    LSHRocksDB(LshDB<RocksDbBucket>),
     HNSW(HnswDB),
 }

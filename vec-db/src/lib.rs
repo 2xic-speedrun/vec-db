@@ -1,6 +1,7 @@
 pub mod backends;
 pub mod bindings;
 pub mod math;
+pub mod storage;
 
 #[cfg(test)]
 mod tests {

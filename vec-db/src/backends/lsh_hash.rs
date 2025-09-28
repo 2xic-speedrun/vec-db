@@ -1,11 +1,11 @@
+use crate::{math::vector::Vector, storage::rocksdb::RocksDB};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::{
     collections::{HashMap, HashSet},
+    hash::{DefaultHasher, Hash, Hasher},
     sync::{Arc, Mutex},
 };
-
-use crate::math::vector::Vector;
 
 pub struct VectorLSH {
     num_hashes: usize,
@@ -75,18 +75,83 @@ impl VectorLSH {
     }
 }
 
+pub trait Storage {
+    fn new() -> Self;
+    fn insert(&mut self, key: String, value: Vector) -> anyhow::Result<()>;
+    fn get(&self, key: &str) -> Option<HashSet<Vector>>;
+}
+
+#[derive(Default)]
+pub struct InMemoryBucket {
+    storage: HashMap<String, HashSet<Vector>>,
+}
+
+impl InMemoryBucket {
+    pub fn new() -> Self {
+        InMemoryBucket {
+            storage: HashMap::new(),
+        }
+    }
+}
+
+impl Storage for InMemoryBucket {
+    fn insert(&mut self, key: String, value: Vector) -> anyhow::Result<()> {
+        self.storage.entry(key.clone()).or_default().insert(value);
+        Ok(())
+    }
+
+    fn get(&self, key: &str) -> Option<HashSet<Vector>> {
+        self.storage.get(key).cloned()
+    }
+
+    fn new() -> Self {
+        InMemoryBucket::new()
+    }
+}
+
+pub struct RocksDbBucket {
+    storage: RocksDB,
+}
+
+fn hash_vector(vector: &Vector) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    vector.hash(&mut hasher);
+    hasher.finish()
+}
+
+impl Storage for RocksDbBucket {
+    fn insert(&mut self, key: String, value: Vector) -> anyhow::Result<()> {
+        let hash = hash_vector(&value);
+        let composite_key = format!("{key}:{hash}");
+
+        let data = bincode::serialize(&value).unwrap();
+        self.storage.put(composite_key, data).unwrap();
+        Ok(())
+    }
+
+    fn get(&self, key: &str) -> Option<HashSet<Vector>> {
+        self.storage.get(key).ok()
+    }
+
+    fn new() -> Self {
+        RocksDbBucket {
+            storage: RocksDB::new("lsh_db").unwrap(),
+        }
+    }
+}
+
 pub struct Results {
     results: Vec<f64>,
     similarity: f64,
 }
 
-pub struct LshDB {
+pub struct LshDB<T = InMemoryBucket> {
     lsh: VectorLSH,
     similarity_threshold: f64,
-    buckets: HashMap<String, HashSet<Vector>>,
+    buckets: T,
 }
 
-impl LshDB {
+impl<T: Storage> LshDB<T> {
     pub fn new(
         num_hashes: usize,
         num_bands: usize,
@@ -96,7 +161,7 @@ impl LshDB {
         LshDB {
             lsh: VectorLSH::new(num_hashes, num_bands, dimension),
             similarity_threshold,
-            buckets: HashMap::new(),
+            buckets: T::new(),
         }
     }
 
@@ -110,10 +175,7 @@ impl LshDB {
         }
 
         for bucket_key in self.lsh.get_bucket_keys(&vec)? {
-            self.buckets
-                .entry(bucket_key)
-                .or_default()
-                .insert(Vector::new(vec.clone()));
+            self.buckets.insert(bucket_key, Vector::new(vec.clone()))?;
         }
         Ok(())
     }
@@ -144,7 +206,6 @@ impl LshDB {
             }
 
             let candidate_vec = candidate;
-            // Use actual cosine similarity instead of LSH estimate for final ranking
             let similarity = candidate_vec.cosine_similarity(&q_vec)?;
 
             if similarity >= self.similarity_threshold {
@@ -155,7 +216,6 @@ impl LshDB {
             }
         }
 
-        // Sort by actual similarity (descending)
         results.sort_by(|a, b| {
             b.similarity
                 .partial_cmp(&a.similarity)

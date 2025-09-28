@@ -6,10 +6,11 @@ use std::sync::{Arc, Mutex};
 use anyhow::{bail, Result};
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Vector {
-    vector: Vec<f64>,
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Vector<T = f64> {
+    vector: Vec<T>,
 }
 
 impl Hash for Vector {
@@ -30,6 +31,7 @@ thread_local! {
     static COUNTER: Cell<u64> = const { Cell::new(0) };
 }
 
+// TODO: implement the generics.
 // TODO: support binary quantization
 impl Vector {
     pub fn new(vec: Vec<f64>) -> Vector {
@@ -41,15 +43,9 @@ impl Vector {
     }
 
     pub fn rand(size: usize, rng: &Arc<Mutex<ChaCha8Rng>>) -> Vector {
-        let mut zero_vec = Vec::new();
-        for _ in 0..size {
-            let random_val = {
-                let mut rng_guard = rng.lock().unwrap();
-                rng_guard.random::<f64>()
-            };
-            zero_vec.push(random_val);
-        }
-        Vector::new(zero_vec)
+        let mut rng_guard = rng.lock().unwrap();
+        let vector: Vec<f64> = (0..size).map(|_| rng_guard.random()).collect();
+        Vector::new(vector)
     }
 
     pub fn l2_distance(&self, other: &Vector) -> Result<f64> {
@@ -74,14 +70,14 @@ impl Vector {
         Ok(distance)
     }
 
-    pub fn norm(&mut self) -> Self {
+    pub fn norm(mut self) -> Self {
         let norm: f64 = self.vector.iter().map(|x| x * x).sum::<f64>().sqrt();
         if norm > 0.0 {
             for x in &mut self.vector {
                 *x /= norm;
             }
         }
-        self.clone()
+        self
     }
 
     pub fn l1_dot(&self, other: &Vector) -> Result<f64> {
@@ -122,15 +118,15 @@ impl Vector {
             );
         }
 
-        let mut vec = self.vector.clone();
-        for (i, _item) in vec.clone().iter().enumerate().take(self.len()) {
+        let mut results = self.vector.clone();
+        for (i, _item) in self.vector.iter().enumerate() {
             let other_value = other.get(i);
             if let Some(other_value) = other_value {
-                vec[i] -= other_value;
+                results[i] -= other_value;
             }
         }
 
-        Ok(Vector { vector: vec })
+        Ok(Vector { vector: results })
     }
 
     pub fn add(&self, other: &Vector) -> Result<Vector> {
@@ -213,20 +209,6 @@ impl Vector {
         self.vector.len() == 0
     }
 
-    pub fn raw(&self) -> &Vec<f64> {
-        &self.vector
-    }
-
-    pub fn println(&self) {
-        for (index, i) in self.vector.iter().enumerate() {
-            if index > 0 {
-                print!(", ");
-            }
-            print!("{i}");
-        }
-        println!();
-    }
-
     pub fn sum_d1(&self) -> f64 {
         let mut value = 0.0;
         for i in self.vector.iter() {
@@ -236,7 +218,11 @@ impl Vector {
     }
 
     pub fn as_vec(self) -> Vec<f64> {
-        self.vector.clone()
+        self.vector
+    }
+
+    pub fn as_vec_ref(&self) -> &Vec<f64> {
+        &self.vector
     }
 }
 

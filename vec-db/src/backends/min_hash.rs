@@ -1,6 +1,5 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::math::vector::Vector;
+use std::collections::{HashMap, HashSet};
 
 pub struct MinHash {
     num_hashes: u64,
@@ -37,6 +36,7 @@ impl MinHash {
         let seeds: Vec<u32> = (0..self.num_hashes)
             .map(|i| (i as u32).wrapping_mul(2654435761))
             .collect();
+
         // TODO: optimize this with a map
         let mut signature = vec![u32::MAX; self.num_hashes as usize];
         for shingle in shingles {

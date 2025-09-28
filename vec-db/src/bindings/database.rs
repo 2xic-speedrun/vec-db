@@ -53,6 +53,24 @@ impl PyDatabase {
     }
 
     #[classmethod]
+    fn with_lsh_rocksdb_backends(
+        _cls: &PyType,
+        num_hashes: usize,
+        num_bands: usize,
+        vector_size: usize,
+        similarity_threshold: f64,
+    ) -> PyResult<Self> {
+        Ok(PyDatabase {
+            database: Backends::LSHRocksDB(LshDB::new(
+                num_hashes,
+                num_bands,
+                vector_size,
+                similarity_threshold,
+            )),
+        })
+    }
+
+    #[classmethod]
     fn with_hnsw(_cls: &PyType, similarity_threshold: f64) -> PyResult<Self> {
         Ok(PyDatabase {
             database: Backends::HNSW(HnswDB::new(256, similarity_threshold)),
@@ -65,6 +83,7 @@ impl PyDatabase {
             Backends::MinHash(backend) => backend.insert(vec),
             Backends::LSH(lsh_db) => lsh_db.insert(vec),
             Backends::HNSW(hnsw_db) => hnsw_db.insert(Vector::new(vec)),
+            Backends::LSHRocksDB(lsh_db) => lsh_db.insert(vec),
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
@@ -75,6 +94,7 @@ impl PyDatabase {
             Backends::MinHash(backend) => backend.query(vec, n),
             Backends::LSH(lsh_db) => lsh_db.query(vec, n),
             Backends::HNSW(hnsw_db) => hnsw_db.query(Vector::new(vec), n),
+            Backends::LSHRocksDB(lsh_db) => lsh_db.query(vec, n),
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }

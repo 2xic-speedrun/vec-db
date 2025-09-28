@@ -125,7 +125,8 @@ impl Kmeans {
 
             for vector in items.iter().take(max_index) {
                 if !vector.equal(data_point) {
-                    results.push(vector.raw().clone());
+                    let value = (*vector).clone();
+                    results.push(value.as_vec());
                 }
             }
         }
@@ -332,7 +333,7 @@ impl KmeansDb {
     pub fn centrodis(&mut self) -> Vec<Vec<f64>> {
         let mut raw = Vec::new();
         for i in self.kmeans.centroids().iter() {
-            raw.push(i.raw().clone());
+            raw.push(i.clone().as_vec());
         }
         raw
     }
@@ -492,7 +493,7 @@ mod tests {
             }
 
             let centroids_before = kmeans.centroids().len();
-            kmeans.fit(25)?; // Fit after each batch
+            kmeans.fit(25)?;
             let centroids_after = kmeans.centroids().len();
 
             if centroids_after > centroids_before {
