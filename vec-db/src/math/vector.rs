@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -13,23 +12,17 @@ pub struct Vector<T = f64> {
     vector: Vec<T>,
 }
 
+// TODO: can we do something better?
 impl Hash for Vector {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // Hash the length first
         self.vector.len().hash(state);
-
-        // Hash each f64 as bytes
         for &value in &self.vector {
-            value.to_bits().hash(state); // Convert f64 to u64 bits
+            value.to_bits().hash(state);
         }
     }
 }
 
 impl Eq for Vector {}
-
-thread_local! {
-    static COUNTER: Cell<u64> = const { Cell::new(0) };
-}
 
 // TODO: implement the generics.
 // TODO: support binary quantization

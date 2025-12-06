@@ -16,11 +16,14 @@ pub struct VectorLSH {
 }
 
 impl VectorLSH {
-    pub fn new(num_hashes: usize, num_bands: usize, dimension: usize) -> Self {
-        assert!(
-            num_hashes % num_bands == 0,
-            "num_hashes must be divisible by num_bands"
-        );
+    pub fn new(num_hashes: usize, num_bands: usize, dimension: usize) -> anyhow::Result<Self> {
+        if num_hashes % num_bands != 0 {
+            return Err(anyhow::anyhow!(
+                "num_hashes ({}) must be divisible by num_bands ({})",
+                num_hashes,
+                num_bands
+            ));
+        }
         let rows_per_band = num_hashes / num_bands;
         let rng_seed = 12345u64;
         let rng = Arc::new(Mutex::new(ChaCha8Rng::seed_from_u64(rng_seed)));
@@ -31,17 +34,23 @@ impl VectorLSH {
             random_vectors.push(vec);
         }
 
-        VectorLSH {
+        Ok(VectorLSH {
             num_hashes,
             num_bands,
             rows_per_band,
             dimension,
             random_vectors,
-        }
+        })
     }
 
     fn hash_vector(&self, vector: &[f64]) -> anyhow::Result<Vec<u32>> {
-        assert_eq!(vector.len(), self.dimension, "Vector dimension mismatch");
+        if vector.len() != self.dimension {
+            return Err(anyhow::anyhow!(
+                "Vector dimension mismatch: expected {}, got {}",
+                self.dimension,
+                vector.len()
+            ));
+        }
 
         let mut signature = Vec::with_capacity(self.num_hashes);
 
@@ -111,6 +120,7 @@ impl Storage for InMemoryBucket {
 
 pub struct RocksDbBucket {
     storage: RocksDB,
+    db_path: String,
 }
 
 fn hash_vector(vector: &Vector) -> u64 {
@@ -124,8 +134,9 @@ impl Storage for RocksDbBucket {
         let hash = hash_vector(&value);
         let composite_key = format!("{key}:{hash}");
 
-        let data = bincode::serialize(&value).unwrap();
-        self.storage.put(composite_key, data).unwrap();
+        let data = bincode::serialize(&value)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize vector: {}", e))?;
+        self.storage.put(composite_key, data)?;
         Ok(())
     }
 
@@ -134,8 +145,22 @@ impl Storage for RocksDbBucket {
     }
 
     fn new() -> Self {
+        let db_path = format!("/tmp/lsh_db_{}", std::process::id());
         RocksDbBucket {
-            storage: RocksDB::new("lsh_db").unwrap(),
+            storage: RocksDB::new(&db_path).expect("Failed to create RocksDB instance"),
+            db_path,
+        }
+    }
+}
+
+// TODO: have a mode for persisting also
+impl Drop for RocksDbBucket {
+    fn drop(&mut self) {
+        if let Err(e) = std::fs::remove_dir_all(&self.db_path) {
+            eprintln!(
+                "Warning: Failed to clean up RocksDB directory {}: {}",
+                self.db_path, e
+            );
         }
     }
 }
@@ -157,12 +182,12 @@ impl<T: Storage> LshDB<T> {
         num_bands: usize,
         dimension: usize,
         similarity_threshold: f64,
-    ) -> Self {
-        LshDB {
-            lsh: VectorLSH::new(num_hashes, num_bands, dimension),
+    ) -> anyhow::Result<Self> {
+        Ok(LshDB {
+            lsh: VectorLSH::new(num_hashes, num_bands, dimension)?,
             similarity_threshold,
             buckets: T::new(),
-        }
+        })
     }
 
     pub fn insert(&mut self, vec: Vec<f64>) -> anyhow::Result<()> {
@@ -232,7 +257,7 @@ mod tests {
     use super::*;
 
     fn create_test_db() -> LshDB {
-        LshDB::new(64, 16, 5, 0.8)
+        LshDB::new(64, 16, 5, 0.8).expect("Failed to create test database")
     }
 
     #[test]

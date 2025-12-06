@@ -42,13 +42,10 @@ impl PyDatabase {
         vector_size: usize,
         similarity_threshold: f64,
     ) -> PyResult<Self> {
+        let lsh_db = LshDB::new(num_hashes, num_bands, vector_size, similarity_threshold)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
-            database: Backends::LSH(LshDB::new(
-                num_hashes,
-                num_bands,
-                vector_size,
-                similarity_threshold,
-            )),
+            database: Backends::LSH(lsh_db),
         })
     }
 
@@ -60,13 +57,10 @@ impl PyDatabase {
         vector_size: usize,
         similarity_threshold: f64,
     ) -> PyResult<Self> {
+        let lsh_db = LshDB::new(num_hashes, num_bands, vector_size, similarity_threshold)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
-            database: Backends::LSHRocksDB(LshDB::new(
-                num_hashes,
-                num_bands,
-                vector_size,
-                similarity_threshold,
-            )),
+            database: Backends::LSHRocksDB(lsh_db),
         })
     }
 
