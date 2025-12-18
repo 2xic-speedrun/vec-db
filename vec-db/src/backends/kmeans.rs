@@ -126,7 +126,7 @@ impl Kmeans {
             for vector in items.iter().take(max_index) {
                 if !vector.equal(data_point) {
                     let value = (*vector).clone();
-                    results.push(value.as_vec());
+                    results.push(value.into());
                 }
             }
         }
@@ -333,7 +333,7 @@ impl KmeansDb {
     pub fn centrodis(&mut self) -> Vec<Vec<f64>> {
         let mut raw = Vec::new();
         for i in self.kmeans.centroids().iter() {
-            raw.push(i.clone().as_vec());
+            raw.push(i.clone().into());
         }
         raw
     }

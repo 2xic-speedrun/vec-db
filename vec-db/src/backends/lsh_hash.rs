@@ -138,7 +138,7 @@ impl Storage for RocksDbBucket {
         let vector_key = format!("v:{vector_hash}");
         
         self.storage.write_batch(|batch| {
-            let vector_bytes = value.as_vec_ref()
+            let vector_bytes = value.as_ref()
                 .iter()
                 .flat_map(|&x| x.to_le_bytes())
                 .collect::<Vec<u8>>();
@@ -266,7 +266,7 @@ impl<T: Storage> LshDB<T> {
 
             if similarity >= self.similarity_threshold {
                 results.push(Results {
-                    results: candidate_vec.as_vec(),
+                    results: candidate_vec.into(),
                     similarity,
                 });
             }

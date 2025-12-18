@@ -84,7 +84,7 @@ impl HnswDB {
 
     pub fn query(&self, query: Vector, k: usize) -> anyhow::Result<Vec<Vec<f64>>> {
         let results = self.search(&query, k, Some(self.similarity_threshold))?;
-        let vector_results = results.iter().map(|f| f.vector.clone().as_vec()).collect();
+        let vector_results = results.iter().map(|f| f.vector.clone().into()).collect();
 
         Ok(vector_results)
     }

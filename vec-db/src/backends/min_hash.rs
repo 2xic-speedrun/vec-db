@@ -143,7 +143,7 @@ impl MinHashDb {
             if candidate_id.equal(&query) {
                 continue;
             }
-            let vec = candidate_id.as_vec();
+            let vec: Vec<f64> = candidate_id.clone().into();
             let candidate_signature = self.min_hash.signature(&vec);
             let similarity = self
                 .min_hash
