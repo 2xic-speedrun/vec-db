@@ -84,6 +84,7 @@ impl VectorLSH {
 
 pub trait Storage {
     fn new() -> Self;
+    fn new_with_persistence(mode: PersistenceMode) -> Self;
     fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()>;
     fn get(&self, key: &str) -> Option<HashSet<Vector>>;
 }
@@ -119,11 +120,22 @@ impl Storage for InMemoryBucket {
     fn new() -> Self {
         InMemoryBucket::new()
     }
+
+    fn new_with_persistence(_mode: PersistenceMode) -> Self {
+        InMemoryBucket::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PersistenceMode {
+    Temporary,
+    Persistent(String),
 }
 
 pub struct RocksDbBucket {
     storage: RocksDB,
     db_path: String,
+    persistence_mode: PersistenceMode,
 }
 
 fn hash_vector(vector: &Vector) -> u64 {
@@ -136,14 +148,15 @@ impl Storage for RocksDbBucket {
     fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()> {
         let vector_hash = hash_vector(&value);
         let vector_key = format!("v:{vector_hash}");
-        
+
         self.storage.write_batch(|batch| {
-            let vector_bytes = value.as_ref()
+            let vector_bytes = value
+                .as_ref()
                 .iter()
                 .flat_map(|&x| x.to_le_bytes())
                 .collect::<Vec<u8>>();
             batch.put(&vector_key, vector_bytes);
-            
+
             for key in keys {
                 let bucket_entry_key = format!("b:{key}:{vector_hash}");
                 batch.put(bucket_entry_key, vector_hash.to_be_bytes());
@@ -164,7 +177,8 @@ impl Storage for RocksDbBucket {
 
                 if let Ok(Some(data)) = self.storage.get(&vector_key) {
                     assert!(data.len() % 8 == 0, "Vector data must be 8-byte aligned");
-                    let floats: Vec<f64> = data.chunks_exact(8)
+                    let floats: Vec<f64> = data
+                        .chunks_exact(8)
                         .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                         .collect();
                     vectors.insert(Vector::new(floats));
@@ -176,22 +190,40 @@ impl Storage for RocksDbBucket {
     }
 
     fn new() -> Self {
-        let db_path = format!("/tmp/lsh_db_{}", std::process::id());
+        Self::new_with_persistence(PersistenceMode::Temporary)
+    }
+
+    fn new_with_persistence(mode: PersistenceMode) -> Self {
+        let (db_path, persistence_mode) = match mode {
+            PersistenceMode::Temporary => (
+                format!("/tmp/lsh_db_{}", std::process::id()),
+                PersistenceMode::Temporary,
+            ),
+            PersistenceMode::Persistent(path) => (path.clone(), PersistenceMode::Persistent(path)),
+        };
+
         RocksDbBucket {
             storage: RocksDB::new(&db_path).expect("Failed to create RocksDB instance"),
             db_path,
+            persistence_mode,
         }
     }
 }
 
-// TODO: have a mode for persisting also
 impl Drop for RocksDbBucket {
     fn drop(&mut self) {
-        if let Err(e) = std::fs::remove_dir_all(&self.db_path) {
-            eprintln!(
-                "Warning: Failed to clean up RocksDB directory {}: {}",
-                self.db_path, e
-            );
+        match self.persistence_mode {
+            PersistenceMode::Temporary => {
+                if let Err(e) = std::fs::remove_dir_all(&self.db_path) {
+                    eprintln!(
+                        "Warning: Failed to clean up temporary RocksDB directory {}: {}",
+                        self.db_path, e
+                    );
+                }
+            }
+            PersistenceMode::Persistent(_) => {
+                // Don't delete persistent databases
+            }
         }
     }
 }
@@ -205,6 +237,24 @@ pub struct LshDB<T = InMemoryBucket> {
     lsh: VectorLSH,
     similarity_threshold: f64,
     buckets: T,
+}
+
+impl LshDB<RocksDbBucket> {
+    pub fn persistent(
+        num_hashes: usize,
+        num_bands: usize,
+        dimension: usize,
+        similarity_threshold: f64,
+        db_path: String,
+    ) -> anyhow::Result<Self> {
+        Self::new_with_persistence(
+            num_hashes,
+            num_bands,
+            dimension,
+            similarity_threshold,
+            PersistenceMode::Persistent(db_path),
+        )
+    }
 }
 
 impl<T: Storage> LshDB<T> {
@@ -221,6 +271,20 @@ impl<T: Storage> LshDB<T> {
         })
     }
 
+    pub fn new_with_persistence(
+        num_hashes: usize,
+        num_bands: usize,
+        dimension: usize,
+        similarity_threshold: f64,
+        persistence_mode: PersistenceMode,
+    ) -> anyhow::Result<Self> {
+        Ok(LshDB {
+            lsh: VectorLSH::new(num_hashes, num_bands, dimension)?,
+            similarity_threshold,
+            buckets: T::new_with_persistence(persistence_mode),
+        })
+    }
+
     pub fn insert(&mut self, vec: Vec<f64>) -> anyhow::Result<()> {
         if vec.len() != self.lsh.dimension {
             return Err(anyhow::anyhow!(
@@ -232,7 +296,8 @@ impl<T: Storage> LshDB<T> {
 
         let buckets = self.lsh.get_bucket_keys(&vec)?;
         let bucket_refs: Vec<&str> = buckets.iter().map(|s| s.as_str()).collect();
-        self.buckets.insert(&bucket_refs, Vector::new(vec.clone()))?;
+        self.buckets
+            .insert(&bucket_refs, Vector::new(vec.clone()))?;
         Ok(())
     }
 

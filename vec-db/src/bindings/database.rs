@@ -1,5 +1,11 @@
 use crate::{
-    backends::{hnsw::HnswDB, kmeans::KmeansDb, lsh_hash::LshDB, min_hash::MinHashDb, Backends},
+    backends::{
+        hnsw::HnswDB,
+        kmeans::KmeansDb,
+        lsh_hash::{LshDB, RocksDbBucket},
+        min_hash::MinHashDb,
+        Backends,
+    },
     math::vector::Vector,
 };
 use pyo3::{prelude::*, types::PyType};
@@ -59,6 +65,28 @@ impl PyDatabase {
     ) -> PyResult<Self> {
         let lsh_db = LshDB::new(num_hashes, num_bands, vector_size, similarity_threshold)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        Ok(PyDatabase {
+            database: Backends::LSHRocksDB(lsh_db),
+        })
+    }
+
+    #[classmethod]
+    fn with_persistent_lsh_rocksdb(
+        _cls: &PyType,
+        num_hashes: usize,
+        num_bands: usize,
+        vector_size: usize,
+        similarity_threshold: f64,
+        db_path: String,
+    ) -> PyResult<Self> {
+        let lsh_db = LshDB::<RocksDbBucket>::persistent(
+            num_hashes,
+            num_bands,
+            vector_size,
+            similarity_threshold,
+            db_path,
+        )
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
             database: Backends::LSHRocksDB(lsh_db),
         })

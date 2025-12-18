@@ -7,9 +7,8 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
-pub trait VectorElement: 
-    Clone + Copy + Send + Sync + 'static + 
-    std::fmt::Display + PartialEq
+pub trait VectorElement:
+    Clone + Copy + Send + Sync + 'static + std::fmt::Display + PartialEq
 {
     fn l2_distance_squared(a: &[Self], b: &[Self]) -> f64;
     fn dot_product(a: &[Self], b: &[Self]) -> f64;
@@ -23,73 +22,113 @@ pub trait VectorElement:
 
 impl VectorElement for f64 {
     fn l2_distance_squared(a: &[f64], b: &[f64]) -> f64 {
-        a.iter().zip(b.iter()).map(|(&x, &y)| {
-            let diff = x - y;
-            diff * diff
-        }).sum()
+        a.iter()
+            .zip(b.iter())
+            .map(|(&x, &y)| {
+                let diff = x - y;
+                diff * diff
+            })
+            .sum()
     }
-    
+
     fn dot_product(a: &[f64], b: &[f64]) -> f64 {
         a.iter().zip(b.iter()).map(|(&x, &y)| x * y).sum()
     }
-    
+
     fn magnitude_squared(slice: &[f64]) -> f64 {
         slice.iter().map(|&x| x * x).sum()
     }
-    
-    fn add(a: f64, b: f64) -> f64 { a + b }
-    fn subtract(a: f64, b: f64) -> f64 { a - b }
-    fn mul_constant(value: f64, constant: f64) -> f64 { value * constant }
-    fn to_f64(value: f64) -> f64 { value }
-    fn zero() -> f64 { 0.0 }
+
+    fn add(a: f64, b: f64) -> f64 {
+        a + b
+    }
+    fn subtract(a: f64, b: f64) -> f64 {
+        a - b
+    }
+    fn mul_constant(value: f64, constant: f64) -> f64 {
+        value * constant
+    }
+    fn to_f64(value: f64) -> f64 {
+        value
+    }
+    fn zero() -> f64 {
+        0.0
+    }
 }
 
 impl VectorElement for f32 {
     fn l2_distance_squared(a: &[f32], b: &[f32]) -> f64 {
-        a.iter().zip(b.iter()).map(|(&x, &y)| {
-            let diff = (x - y) as f64;
-            diff * diff
-        }).sum()
+        a.iter()
+            .zip(b.iter())
+            .map(|(&x, &y)| {
+                let diff = (x - y) as f64;
+                diff * diff
+            })
+            .sum()
     }
-    
+
     fn dot_product(a: &[f32], b: &[f32]) -> f64 {
         a.iter().zip(b.iter()).map(|(&x, &y)| (x * y) as f64).sum()
     }
-    
+
     fn magnitude_squared(slice: &[f32]) -> f64 {
         slice.iter().map(|&x| (x * x) as f64).sum()
     }
-    
-    fn add(a: f32, b: f32) -> f32 { a + b }
-    fn subtract(a: f32, b: f32) -> f32 { a - b }
-    fn mul_constant(value: f32, constant: f64) -> f32 { value * (constant as f32) }
-    fn to_f64(value: f32) -> f64 { value as f64 }
-    fn zero() -> f32 { 0.0 }
+
+    fn add(a: f32, b: f32) -> f32 {
+        a + b
+    }
+    fn subtract(a: f32, b: f32) -> f32 {
+        a - b
+    }
+    fn mul_constant(value: f32, constant: f64) -> f32 {
+        value * (constant as f32)
+    }
+    fn to_f64(value: f32) -> f64 {
+        value as f64
+    }
+    fn zero() -> f32 {
+        0.0
+    }
 }
 
 impl VectorElement for u8 {
     fn l2_distance_squared(a: &[u8], b: &[u8]) -> f64 {
-        a.iter().zip(b.iter()).map(|(&x, &y)| {
-            let diff = (x as i16 - y as i16) as f64;
-            diff * diff
-        }).sum()
+        a.iter()
+            .zip(b.iter())
+            .map(|(&x, &y)| {
+                let diff = (x as i16 - y as i16) as f64;
+                diff * diff
+            })
+            .sum()
     }
-    
+
     fn dot_product(a: &[u8], b: &[u8]) -> f64 {
-        a.iter().zip(b.iter()).map(|(&x, &y)| (x as f64) * (y as f64)).sum()
+        a.iter()
+            .zip(b.iter())
+            .map(|(&x, &y)| (x as f64) * (y as f64))
+            .sum()
     }
-    
+
     fn magnitude_squared(slice: &[u8]) -> f64 {
         slice.iter().map(|&x| (x as f64) * (x as f64)).sum()
     }
-    
-    fn add(a: u8, b: u8) -> u8 { a.saturating_add(b) }
-    fn subtract(a: u8, b: u8) -> u8 { a.saturating_sub(b) }
-    fn mul_constant(value: u8, constant: f64) -> u8 { 
-        ((value as f64) * constant).clamp(0.0, 255.0) as u8 
+
+    fn add(a: u8, b: u8) -> u8 {
+        a.saturating_add(b)
     }
-    fn to_f64(value: u8) -> f64 { value as f64 }
-    fn zero() -> u8 { 0 }
+    fn subtract(a: u8, b: u8) -> u8 {
+        a.saturating_sub(b)
+    }
+    fn mul_constant(value: u8, constant: f64) -> u8 {
+        ((value as f64) * constant).clamp(0.0, 255.0) as u8
+    }
+    fn to_f64(value: u8) -> f64 {
+        value as f64
+    }
+    fn zero() -> u8 {
+        0
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,8 +147,8 @@ impl<T: VectorElement> Hash for Vector<T> {
 
 impl<T: VectorElement> Eq for Vector<T> {}
 
-impl<T: VectorElement> Serialize for Vector<T> 
-where 
+impl<T: VectorElement> Serialize for Vector<T>
+where
     T: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -120,8 +159,8 @@ where
     }
 }
 
-impl<'de, T: VectorElement> Deserialize<'de> for Vector<T> 
-where 
+impl<'de, T: VectorElement> Deserialize<'de> for Vector<T>
+where
     T: Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -147,7 +186,9 @@ impl<T: VectorElement> Vector<T> {
         T: From<f64>,
     {
         let mut rng_guard = rng.lock().unwrap();
-        let vector: Vec<T> = (0..size).map(|_| T::from(rng_guard.random::<f64>())).collect();
+        let vector: Vec<T> = (0..size)
+            .map(|_| T::from(rng_guard.random::<f64>()))
+            .collect();
         Vector::new(vector)
     }
 
@@ -251,7 +292,11 @@ impl<T: VectorElement> Vector<T> {
     }
 
     pub fn mul_constant(&self, constant: f64) -> Vector<T> {
-        let vec: Vec<T> = self.vector.iter().map(|&x| T::mul_constant(x, constant)).collect();
+        let vec: Vec<T> = self
+            .vector
+            .iter()
+            .map(|&x| T::mul_constant(x, constant))
+            .collect();
         Vector { vector: vec }
     }
 
@@ -263,13 +308,17 @@ impl<T: VectorElement> Vector<T> {
     where
         T: VectorElement,
     {
-        let vec: Vec<T> = self.vector.iter().map(|&x| {
-            if T::to_f64(x) < 0.0 {
-                T::mul_constant(x, -1.0)
-            } else {
-                x
-            }
-        }).collect();
+        let vec: Vec<T> = self
+            .vector
+            .iter()
+            .map(|&x| {
+                if T::to_f64(x) < 0.0 {
+                    T::mul_constant(x, -1.0)
+                } else {
+                    x
+                }
+            })
+            .collect();
         Vector { vector: vec }
     }
 
@@ -304,7 +353,6 @@ impl<T: VectorElement> Vector<T> {
     pub fn sum_d1(&self) -> f64 {
         self.vector.iter().map(|&x| T::to_f64(x)).sum()
     }
-
 }
 
 impl<T: VectorElement> From<Vector<T>> for Vec<T> {
@@ -319,7 +367,7 @@ impl<T: VectorElement> AsRef<[T]> for Vector<T> {
     }
 }
 
-impl<T: VectorElement> fmt::Display for Vector<T> 
+impl<T: VectorElement> fmt::Display for Vector<T>
 where
     T: fmt::Display,
 {
