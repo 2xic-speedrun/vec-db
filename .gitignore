@@ -5,3 +5,4 @@ target
 libvec_db.
 __pycache__
 dataset
+debug

@@ -98,7 +98,7 @@ impl Kmeans {
 
         for (index, centroid) in self.centroids.iter().enumerate() {
             let distance = centroid.l2_distance_squared(data_point).map_err(|e| {
-                anyhow::anyhow!("Failed to calculate distance to centroid {}: {}", index, e)
+                anyhow::anyhow!("Failed to calculate distance to centroid {index}: {e}")
             })?;
 
             if distance < best_score {

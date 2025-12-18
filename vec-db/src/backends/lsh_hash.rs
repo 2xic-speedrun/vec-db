@@ -19,9 +19,7 @@ impl VectorLSH {
     pub fn new(num_hashes: usize, num_bands: usize, dimension: usize) -> anyhow::Result<Self> {
         if num_hashes % num_bands != 0 {
             return Err(anyhow::anyhow!(
-                "num_hashes ({}) must be divisible by num_bands ({})",
-                num_hashes,
-                num_bands
+                "num_hashes ({num_hashes}) must be divisible by num_bands ({num_bands})"
             ));
         }
         let rows_per_band = num_hashes / num_bands;
@@ -86,7 +84,7 @@ impl VectorLSH {
 
 pub trait Storage {
     fn new() -> Self;
-    fn insert(&mut self, key: String, value: Vector) -> anyhow::Result<()>;
+    fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()>;
     fn get(&self, key: &str) -> Option<HashSet<Vector>>;
 }
 
@@ -104,8 +102,13 @@ impl InMemoryBucket {
 }
 
 impl Storage for InMemoryBucket {
-    fn insert(&mut self, key: String, value: Vector) -> anyhow::Result<()> {
-        self.storage.entry(key.clone()).or_default().insert(value);
+    fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()> {
+        for key in keys {
+            self.storage
+                .entry(key.to_string())
+                .or_default()
+                .insert(value.clone());
+        }
         Ok(())
     }
 
@@ -130,18 +133,46 @@ fn hash_vector(vector: &Vector) -> u64 {
 }
 
 impl Storage for RocksDbBucket {
-    fn insert(&mut self, key: String, value: Vector) -> anyhow::Result<()> {
-        let hash = hash_vector(&value);
-        let composite_key = format!("{key}:{hash}");
+    fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()> {
+        let vector_hash = hash_vector(&value);
+        let vector_key = format!("v:{vector_hash}");
+        
+        self.storage.write_batch(|batch| {
+            let vector_bytes = value.as_vec_ref()
+                .iter()
+                .flat_map(|&x| x.to_le_bytes())
+                .collect::<Vec<u8>>();
+            batch.put(&vector_key, vector_bytes);
+            
+            for key in keys {
+                let bucket_entry_key = format!("b:{key}:{vector_hash}");
+                batch.put(bucket_entry_key, vector_hash.to_be_bytes());
+            }
+        })?;
 
-        let data = bincode::serialize(&value)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize vector: {}", e))?;
-        self.storage.put(composite_key, data)?;
         Ok(())
     }
 
     fn get(&self, key: &str) -> Option<HashSet<Vector>> {
-        self.storage.get(key).ok()
+        let prefix = format!("b:{key}:");
+        let mut vectors = HashSet::new();
+
+        for (_, hash_bytes) in self.storage.prefix_iterator(&prefix) {
+            if let Ok(hash_array) = hash_bytes.as_ref().try_into() {
+                let vector_hash = u64::from_be_bytes(hash_array);
+                let vector_key = format!("v:{vector_hash}");
+
+                if let Ok(Some(data)) = self.storage.get(&vector_key) {
+                    assert!(data.len() % 8 == 0, "Vector data must be 8-byte aligned");
+                    let floats: Vec<f64> = data.chunks_exact(8)
+                        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    vectors.insert(Vector::new(floats));
+                }
+            }
+        }
+
+        (!vectors.is_empty()).then_some(vectors)
     }
 
     fn new() -> Self {
@@ -199,9 +230,9 @@ impl<T: Storage> LshDB<T> {
             ));
         }
 
-        for bucket_key in self.lsh.get_bucket_keys(&vec)? {
-            self.buckets.insert(bucket_key, Vector::new(vec.clone()))?;
-        }
+        let buckets = self.lsh.get_bucket_keys(&vec)?;
+        let bucket_refs: Vec<&str> = buckets.iter().map(|s| s.as_str()).collect();
+        self.buckets.insert(&bucket_refs, Vector::new(vec.clone()))?;
         Ok(())
     }
 
