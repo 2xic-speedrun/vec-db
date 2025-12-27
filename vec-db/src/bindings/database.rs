@@ -2,13 +2,16 @@ use crate::{
     backends::{
         hnsw::HnswDB,
         kmeans::KmeansDb,
-        lsh_hash::{LshDB, RocksDbBucket},
+        lsh_hash::{LshDB, Metadata, RocksDbBucket},
         min_hash::MinHashDb,
         Backends,
     },
     math::vector::Vector,
 };
 use pyo3::{prelude::*, types::PyType};
+use std::collections::HashMap;
+
+type QueryResultWithMetadata = (Vec<f64>, HashMap<String, String>, f64);
 
 #[pyclass]
 pub struct PyDatabase {
@@ -110,6 +113,24 @@ impl PyDatabase {
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
+    fn insert_with_metadata(
+        &mut self,
+        vec: Vec<f64>,
+        metadata: HashMap<String, String>,
+    ) -> PyResult<()> {
+        let metadata: Metadata = metadata.into_iter().collect();
+        let results = match &mut self.database {
+            Backends::LSH(lsh_db) => lsh_db.insert_with_metadata(vec, metadata),
+            Backends::LSHRocksDB(lsh_db) => lsh_db.insert_with_metadata(vec, metadata),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "insert_with_metadata only supported for LSH backends",
+                ))
+            }
+        };
+        results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
     fn query(&mut self, vec: Vec<f64>, n: usize) -> PyResult<Vec<Vec<f64>>> {
         let results = match &mut self.database {
             Backends::Kmenas(backend) => backend.query(Vector::new(vec), n),
@@ -119,5 +140,75 @@ impl PyDatabase {
             Backends::LSHRocksDB(lsh_db) => lsh_db.query(vec, n),
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    fn query_with_metadata(
+        &self,
+        vec: Vec<f64>,
+        n: usize,
+    ) -> PyResult<Vec<QueryResultWithMetadata>> {
+        let results = match &self.database {
+            Backends::LSH(lsh_db) => lsh_db.query_with_metadata(vec, n),
+            Backends::LSHRocksDB(lsh_db) => lsh_db.query_with_metadata(vec, n),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "query_with_metadata only supported for LSH backends",
+                ))
+            }
+        };
+        results
+            .map(|r| {
+                r.into_iter()
+                    .map(|item| {
+                        (
+                            item.results,
+                            item.metadata.into_iter().collect(),
+                            item.similarity,
+                        )
+                    })
+                    .collect()
+            })
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    fn compact(&self) -> PyResult<()> {
+        match &self.database {
+            Backends::LSHRocksDB(lsh_db) => {
+                lsh_db.compact();
+                Ok(())
+            }
+            _ => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "compact only supported for RocksDB backends",
+            )),
+        }
+    }
+
+    fn query_dissimilar_with_metadata(
+        &self,
+        vec: Vec<f64>,
+        n: usize,
+    ) -> PyResult<Vec<QueryResultWithMetadata>> {
+        let results = match &self.database {
+            Backends::LSH(lsh_db) => lsh_db.query_dissimilar_with_metadata(vec, n),
+            Backends::LSHRocksDB(lsh_db) => lsh_db.query_dissimilar_with_metadata(vec, n),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "query_dissimilar_with_metadata only supported for LSH backends",
+                ))
+            }
+        };
+        results
+            .map(|r| {
+                r.into_iter()
+                    .map(|item| {
+                        (
+                            item.results,
+                            item.metadata.into_iter().collect(),
+                            item.similarity,
+                        )
+                    })
+                    .collect()
+            })
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 }

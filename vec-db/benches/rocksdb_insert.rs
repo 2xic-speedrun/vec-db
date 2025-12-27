@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use vec_db::backends::lsh_hash::{LshDB, RocksDbBucket};
-use vec_db::math::vector::VectorU8;
+use libvec_db::backends::lsh_hash::{LshDB, RocksDbBucket};
+use libvec_db::math::vector::VectorU8;
+use std::collections::BTreeMap;
 
 fn bench_lsh_rocksdb_vector_insert_f64(c: &mut Criterion) {
     c.bench_function("lsh_rocksdb_f64_insert_100", |b| {
@@ -54,11 +55,54 @@ fn bench_vector_u8_operations(c: &mut Criterion) {
     });
 }
 
+fn bench_query_big_db(c: &mut Criterion) {
+    let mut group = c.benchmark_group("query_big");
+    group.sample_size(10);
+
+    let mut db: LshDB<RocksDbBucket> = LshDB::new(256, 16, 256, 0.8).unwrap();
+    eprintln!("Inserting 100k items with clustered distribution...");
+    for i in 0..100000 {
+        // Create clustered data: base pattern + small perturbation
+        // This simulates EVM bytecode where many contracts share similar byte frequencies
+        let cluster = i % 50; // 50 clusters
+        let mut freq: Vec<f64> = (0..256).map(|j| {
+            let base = ((cluster * 7 + j * 3) % 50) as f64;
+            let perturb = (i as f64 * 0.001).sin() * 0.1;
+            base + perturb
+        }).collect();
+        let total: f64 = freq.iter().sum();
+        if total > 0.0 { for f in &mut freq { *f /= total; } }
+        let mean = freq.iter().sum::<f64>() / 256.0;
+        let vec: Vec<f64> = freq.iter().map(|f| f - mean).collect();
+        let mut m = BTreeMap::new();
+        m.insert("n".into(), format!("{}", i));
+        db.insert_with_metadata(vec, m).unwrap();
+    }
+    let q: Vec<f64> = {
+        let cluster = 25;
+        let mut freq: Vec<f64> = (0..256).map(|j| ((cluster * 7 + j * 3) % 50) as f64).collect();
+        let total: f64 = freq.iter().sum();
+        if total > 0.0 { for f in &mut freq { *f /= total; } }
+        let mean = freq.iter().sum::<f64>() / 256.0;
+        freq.iter().map(|f| f - mean).collect()
+    };
+
+    eprintln!("Done inserting, starting benchmark...");
+    group.bench_function("no_meta", |b| {
+        b.iter(|| db.query(q.clone(), 5).unwrap());
+    });
+    group.bench_function("with_meta", |b| {
+        b.iter(|| db.query_with_metadata(q.clone(), 5).unwrap());
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_lsh_rocksdb_vector_insert_f64,
     bench_lsh_rocksdb_vector_insert_u8,
     bench_vector_quantization,
-    bench_vector_u8_operations
+    bench_vector_u8_operations,
+    bench_query_big_db
 );
 criterion_main!(benches);

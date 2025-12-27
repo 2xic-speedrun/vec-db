@@ -1,11 +1,14 @@
 use crate::{math::vector::Vector, storage::rocksdb::RocksDB};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use rayon::prelude::*;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     hash::{DefaultHasher, Hash, Hasher},
     sync::{Arc, Mutex},
 };
+
+pub type Metadata = BTreeMap<String, String>;
 
 pub struct VectorLSH {
     num_hashes: usize,
@@ -82,22 +85,52 @@ impl VectorLSH {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct VectorWithMetadata {
+    pub vector: Vector,
+    pub metadata: Metadata,
+}
+
 pub trait Storage {
     fn new() -> Self;
     fn new_with_persistence(mode: PersistenceMode) -> Self;
     fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()>;
+    fn insert_with_metadata(
+        &mut self,
+        keys: &[&str],
+        value: Vector,
+        metadata: Metadata,
+    ) -> anyhow::Result<()>;
     fn get(&self, key: &str) -> Option<HashSet<Vector>>;
+    fn get_with_metadata(&self, key: &str) -> Option<Vec<VectorWithMetadata>>;
+    fn get_hashes(&self, key: &str) -> Vec<u64>;
+    fn load_vectors(&self, hashes: &[u64]) -> Vec<(u64, Vector)>;
+    fn load_metadata(&self, hashes: &[u64]) -> Vec<Metadata>;
+    fn load_vectors_with_metadata(&self, hashes: &[u64]) -> Vec<VectorWithMetadata>;
+    fn random_sample_excluding_buckets(
+        &self,
+        exclude_buckets: &HashSet<String>,
+        n: usize,
+    ) -> Vec<VectorWithMetadata>;
+}
+
+fn hash_vector(vector: &Vector) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    vector.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[derive(Default)]
 pub struct InMemoryBucket {
     storage: HashMap<String, HashSet<Vector>>,
+    metadata_store: HashMap<u64, Metadata>,
 }
 
 impl InMemoryBucket {
     pub fn new() -> Self {
         InMemoryBucket {
             storage: HashMap::new(),
+            metadata_store: HashMap::new(),
         }
     }
 }
@@ -113,8 +146,39 @@ impl Storage for InMemoryBucket {
         Ok(())
     }
 
+    fn insert_with_metadata(
+        &mut self,
+        keys: &[&str],
+        value: Vector,
+        metadata: Metadata,
+    ) -> anyhow::Result<()> {
+        let vector_hash = hash_vector(&value);
+        self.metadata_store.insert(vector_hash, metadata);
+        self.insert(keys, value)
+    }
+
     fn get(&self, key: &str) -> Option<HashSet<Vector>> {
         self.storage.get(key).cloned()
+    }
+
+    fn get_with_metadata(&self, key: &str) -> Option<Vec<VectorWithMetadata>> {
+        self.storage.get(key).map(|vectors| {
+            vectors
+                .iter()
+                .map(|v| {
+                    let vector_hash = hash_vector(v);
+                    let metadata = self
+                        .metadata_store
+                        .get(&vector_hash)
+                        .cloned()
+                        .unwrap_or_default();
+                    VectorWithMetadata {
+                        vector: v.clone(),
+                        metadata,
+                    }
+                })
+                .collect()
+        })
     }
 
     fn new() -> Self {
@@ -123,6 +187,78 @@ impl Storage for InMemoryBucket {
 
     fn new_with_persistence(_mode: PersistenceMode) -> Self {
         InMemoryBucket::new()
+    }
+
+    fn get_hashes(&self, key: &str) -> Vec<u64> {
+        self.storage
+            .get(key)
+            .map(|vectors| vectors.iter().map(hash_vector).collect())
+            .unwrap_or_default()
+    }
+
+    fn load_vectors(&self, hashes: &[u64]) -> Vec<(u64, Vector)> {
+        hashes
+            .iter()
+            .filter_map(|h| {
+                self.storage
+                    .values()
+                    .flatten()
+                    .find(|v| hash_vector(v) == *h)
+                    .map(|v| (*h, v.clone()))
+            })
+            .collect()
+    }
+
+    fn load_metadata(&self, hashes: &[u64]) -> Vec<Metadata> {
+        hashes
+            .iter()
+            .map(|h| self.metadata_store.get(h).cloned().unwrap_or_default())
+            .collect()
+    }
+
+    fn load_vectors_with_metadata(&self, hashes: &[u64]) -> Vec<VectorWithMetadata> {
+        hashes
+            .iter()
+            .filter_map(|h| {
+                self.storage
+                    .values()
+                    .flatten()
+                    .find(|v| hash_vector(v) == *h)
+                    .map(|v| VectorWithMetadata {
+                        vector: v.clone(),
+                        metadata: self.metadata_store.get(h).cloned().unwrap_or_default(),
+                    })
+            })
+            .collect()
+    }
+
+    fn random_sample_excluding_buckets(
+        &self,
+        exclude_buckets: &HashSet<String>,
+        n: usize,
+    ) -> Vec<VectorWithMetadata> {
+        let mut rng = rand::rng();
+        let mut seen_hashes = HashSet::new();
+        let mut results = Vec::new();
+
+        for (bucket_key, vectors) in &self.storage {
+            if exclude_buckets.contains(bucket_key) {
+                continue;
+            }
+            for v in vectors {
+                let h = hash_vector(v);
+                if seen_hashes.insert(h) {
+                    results.push(VectorWithMetadata {
+                        vector: v.clone(),
+                        metadata: self.metadata_store.get(&h).cloned().unwrap_or_default(),
+                    });
+                }
+            }
+        }
+
+        results.shuffle(&mut rng);
+        results.truncate(n);
+        results
     }
 }
 
@@ -136,12 +272,6 @@ pub struct RocksDbBucket {
     storage: RocksDB,
     db_path: String,
     persistence_mode: PersistenceMode,
-}
-
-fn hash_vector(vector: &Vector) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    vector.hash(&mut hasher);
-    hasher.finish()
 }
 
 impl Storage for RocksDbBucket {
@@ -166,27 +296,117 @@ impl Storage for RocksDbBucket {
         Ok(())
     }
 
+    fn insert_with_metadata(
+        &mut self,
+        keys: &[&str],
+        value: Vector,
+        metadata: Metadata,
+    ) -> anyhow::Result<()> {
+        let vector_hash = hash_vector(&value);
+        let vector_key = format!("v:{vector_hash}");
+        let metadata_key = format!("m:{vector_hash}");
+
+        self.storage.write_batch(|batch| {
+            let vector_bytes = value
+                .as_ref()
+                .iter()
+                .flat_map(|&x| x.to_le_bytes())
+                .collect::<Vec<u8>>();
+            batch.put(&vector_key, vector_bytes);
+
+            let metadata_bytes =
+                bincode::serialize(&metadata).expect("Failed to serialize metadata");
+            batch.put(&metadata_key, metadata_bytes);
+
+            for key in keys {
+                let bucket_entry_key = format!("b:{key}:{vector_hash}");
+                batch.put(bucket_entry_key, vector_hash.to_be_bytes());
+            }
+        })?;
+
+        Ok(())
+    }
+
     fn get(&self, key: &str) -> Option<HashSet<Vector>> {
         let prefix = format!("b:{key}:");
+
+        let hashes: Vec<u64> = self
+            .storage
+            .prefix_iterator(&prefix)
+            .filter_map(|(_, hash_bytes)| {
+                hash_bytes.as_ref().try_into().ok().map(u64::from_be_bytes)
+            })
+            .collect();
+
+        if hashes.is_empty() {
+            return None;
+        }
+
+        let vector_keys: Vec<String> = hashes.iter().map(|h| format!("v:{h}")).collect();
+        let vector_data = self.storage.multi_get(&vector_keys);
+
         let mut vectors = HashSet::new();
-
-        for (_, hash_bytes) in self.storage.prefix_iterator(&prefix) {
-            if let Ok(hash_array) = hash_bytes.as_ref().try_into() {
-                let vector_hash = u64::from_be_bytes(hash_array);
-                let vector_key = format!("v:{vector_hash}");
-
-                if let Ok(Some(data)) = self.storage.get(&vector_key) {
-                    assert!(data.len() % 8 == 0, "Vector data must be 8-byte aligned");
-                    let floats: Vec<f64> = data
-                        .chunks_exact(8)
-                        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
-                        .collect();
-                    vectors.insert(Vector::new(floats));
-                }
+        for data in vector_data.into_iter().flatten() {
+            if data.len() % 8 == 0 {
+                let floats: Vec<f64> = data
+                    .chunks_exact(8)
+                    .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                    .collect();
+                vectors.insert(Vector::new(floats));
             }
         }
 
         (!vectors.is_empty()).then_some(vectors)
+    }
+
+    fn get_with_metadata(&self, key: &str) -> Option<Vec<VectorWithMetadata>> {
+        let prefix = format!("b:{key}:");
+
+        let hashes: Vec<u64> = self
+            .storage
+            .prefix_iterator(&prefix)
+            .filter_map(|(_, hash_bytes)| {
+                hash_bytes
+                    .as_ref()
+                    .try_into()
+                    .ok()
+                    .map(u64::from_be_bytes)
+            })
+            .collect();
+
+        if hashes.is_empty() {
+            return None;
+        }
+
+        let vector_keys: Vec<String> = hashes.iter().map(|h| format!("v:{h}")).collect();
+        let metadata_keys: Vec<String> = hashes.iter().map(|h| format!("m:{h}")).collect();
+
+        let vectors = self.storage.multi_get(&vector_keys);
+        let metadatas = self.storage.multi_get(&metadata_keys);
+
+        let mut results = Vec::new();
+        for (vec_data, meta_data) in vectors.into_iter().zip(metadatas.into_iter()) {
+            if let Some(data) = vec_data {
+                if data.len() % 8 != 0 {
+                    continue;
+                }
+                let floats: Vec<f64> = data
+                    .chunks_exact(8)
+                    .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                    .collect();
+
+                let metadata = meta_data
+                    .and_then(|bytes| bincode::deserialize(&bytes).ok())
+                    .unwrap_or_default();
+
+                results.push(VectorWithMetadata {
+                    vector: Vector::new(floats),
+                    metadata,
+                });
+            }
+        }
+
+        (!results.is_empty()).then_some(results)
     }
 
     fn new() -> Self {
@@ -207,6 +427,151 @@ impl Storage for RocksDbBucket {
             db_path,
             persistence_mode,
         }
+    }
+
+    fn get_hashes(&self, key: &str) -> Vec<u64> {
+        let prefix = format!("b:{key}:");
+        self.storage
+            .prefix_iterator(&prefix)
+            .filter_map(|(_, hash_bytes)| {
+                hash_bytes.as_ref().try_into().ok().map(u64::from_be_bytes)
+            })
+            .collect()
+    }
+
+    fn load_vectors(&self, hashes: &[u64]) -> Vec<(u64, Vector)> {
+        if hashes.is_empty() {
+            return Vec::new();
+        }
+
+        const BATCH_SIZE: usize = 2000;
+
+        hashes
+            .par_chunks(BATCH_SIZE)
+            .flat_map(|batch| {
+                let vector_keys: Vec<String> = batch.iter().map(|h| format!("v:{h}")).collect();
+                let vectors = self.storage.multi_get(&vector_keys);
+
+                batch
+                    .iter()
+                    .zip(vectors)
+                    .filter_map(|(hash, vec_data)| {
+                        let data = vec_data?;
+                        if data.len() % 8 != 0 {
+                            return None;
+                        }
+                        let floats: Vec<f64> = data
+                            .chunks_exact(8)
+                            .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                            .collect();
+                        Some((*hash, Vector::new(floats)))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn load_metadata(&self, hashes: &[u64]) -> Vec<Metadata> {
+        if hashes.is_empty() {
+            return Vec::new();
+        }
+
+        let metadata_keys: Vec<String> = hashes.iter().map(|h| format!("m:{h}")).collect();
+        let metadatas = self.storage.multi_get(&metadata_keys);
+
+        metadatas
+            .into_iter()
+            .map(|meta_data| {
+                meta_data
+                    .and_then(|bytes| bincode::deserialize(&bytes).ok())
+                    .unwrap_or_default()
+            })
+            .collect()
+    }
+
+    fn load_vectors_with_metadata(&self, hashes: &[u64]) -> Vec<VectorWithMetadata> {
+        if hashes.is_empty() {
+            return Vec::new();
+        }
+
+        const BATCH_SIZE: usize = 1000;
+
+        hashes
+            .par_chunks(BATCH_SIZE)
+            .flat_map(|batch| {
+                let vector_keys: Vec<String> = batch.iter().map(|h| format!("v:{h}")).collect();
+                let metadata_keys: Vec<String> = batch.iter().map(|h| format!("m:{h}")).collect();
+
+                let vectors = self.storage.multi_get(&vector_keys);
+                let metadatas = self.storage.multi_get(&metadata_keys);
+
+                vectors
+                    .into_iter()
+                    .zip(metadatas)
+                    .filter_map(|(vec_data, meta_data)| {
+                        let data = vec_data?;
+                        if data.len() % 8 != 0 {
+                            return None;
+                        }
+                        let floats: Vec<f64> = data
+                            .chunks_exact(8)
+                            .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                            .collect();
+                        let metadata = meta_data
+                            .and_then(|bytes| bincode::deserialize(&bytes).ok())
+                            .unwrap_or_default();
+                        Some(VectorWithMetadata {
+                            vector: Vector::new(floats),
+                            metadata,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn random_sample_excluding_buckets(
+        &self,
+        exclude_buckets: &HashSet<String>,
+        n: usize,
+    ) -> Vec<VectorWithMetadata> {
+        let sampled_keys = self.storage.sample_keys("b:", n * 5);
+
+        let mut hashes = Vec::new();
+        for key in sampled_keys {
+            if let Some(rest) = key.strip_prefix("b:") {
+                if let Some(last_colon) = rest.rfind(':') {
+                    let bucket_key = &rest[..last_colon];
+                    if !exclude_buckets.contains(bucket_key) {
+                        if let Ok(hash) = rest[last_colon + 1..].parse::<u64>() {
+                            hashes.push(hash);
+                        }
+                    }
+                }
+            }
+        }
+
+        hashes.sort();
+        hashes.dedup();
+        hashes.truncate(n);
+
+        self.load_vectors_with_metadata(&hashes)
+    }
+}
+
+impl RocksDbBucket {
+    pub fn compact(&self) {
+        self.storage.compact();
+    }
+
+    pub fn random_sample_with_metadata(&self, n: usize) -> Vec<VectorWithMetadata> {
+        let keys = self.storage.sample_keys("v:", n);
+        let hashes: Vec<u64> = keys
+            .iter()
+            .filter_map(|k| k.strip_prefix("v:"))
+            .filter_map(|h| h.parse().ok())
+            .collect();
+        self.load_vectors_with_metadata(&hashes)
     }
 }
 
@@ -233,6 +598,12 @@ pub struct Results {
     similarity: f64,
 }
 
+pub struct ResultsWithMetadata {
+    pub results: Vec<f64>,
+    pub metadata: Metadata,
+    pub similarity: f64,
+}
+
 pub struct LshDB<T = InMemoryBucket> {
     lsh: VectorLSH,
     similarity_threshold: f64,
@@ -255,9 +626,13 @@ impl LshDB<RocksDbBucket> {
             PersistenceMode::Persistent(db_path),
         )
     }
+
+    pub fn compact(&self) {
+        self.buckets.compact();
+    }
 }
 
-impl<T: Storage> LshDB<T> {
+impl<T: Storage + Sync> LshDB<T> {
     pub fn new(
         num_hashes: usize,
         num_bands: usize,
@@ -301,6 +676,26 @@ impl<T: Storage> LshDB<T> {
         Ok(())
     }
 
+    pub fn insert_with_metadata(
+        &mut self,
+        vec: Vec<f64>,
+        metadata: Metadata,
+    ) -> anyhow::Result<()> {
+        if vec.len() != self.lsh.dimension {
+            return Err(anyhow::anyhow!(
+                "Vector dimension mismatch: expected {}, got {}",
+                self.lsh.dimension,
+                vec.len()
+            ));
+        }
+
+        let buckets = self.lsh.get_bucket_keys(&vec)?;
+        let bucket_refs: Vec<&str> = buckets.iter().map(|s| s.as_str()).collect();
+        self.buckets
+            .insert_with_metadata(&bucket_refs, Vector::new(vec.clone()), metadata)?;
+        Ok(())
+    }
+
     pub fn query(&self, vec: Vec<f64>, n: usize) -> anyhow::Result<Vec<Vec<f64>>> {
         if vec.len() != self.lsh.dimension {
             return Err(anyhow::anyhow!(
@@ -310,32 +705,37 @@ impl<T: Storage> LshDB<T> {
             ));
         }
 
+        let bucket_keys = self.lsh.get_bucket_keys(&vec)?;
+        let bucket_results: Vec<HashSet<Vector>> = bucket_keys
+            .par_iter()
+            .filter_map(|key| self.buckets.get(key))
+            .collect();
+
         let mut candidates = HashSet::new();
-        for bucket_key in self.lsh.get_bucket_keys(&vec)? {
-            if let Some(bucket_entries) = self.buckets.get(&bucket_key) {
-                candidates.extend(bucket_entries.iter().cloned());
-            }
+        for bucket_entries in bucket_results {
+            candidates.extend(bucket_entries.into_iter());
         }
 
-        let mut results = Vec::new();
-        let query_vector = Vector::new(vec.clone());
         let q_vec = Vector::new(vec);
+        let threshold = self.similarity_threshold;
 
-        for candidate in candidates {
-            if candidate.equal(&query_vector) {
-                continue;
-            }
-
-            let candidate_vec = candidate;
-            let similarity = candidate_vec.cosine_similarity(&q_vec)?;
-
-            if similarity >= self.similarity_threshold {
-                results.push(Results {
-                    results: candidate_vec.into(),
-                    similarity,
-                });
-            }
-        }
+        let mut results: Vec<Results> = candidates
+            .into_par_iter()
+            .filter_map(|candidate| {
+                if candidate.equal(&q_vec) {
+                    return None;
+                }
+                let similarity = candidate.cosine_similarity(&q_vec).ok()?;
+                if similarity >= threshold {
+                    Some(Results {
+                        results: candidate.into(),
+                        similarity,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         results.sort_by(|a, b| {
             b.similarity
@@ -345,6 +745,108 @@ impl<T: Storage> LshDB<T> {
         results.truncate(n);
 
         Ok(results.into_iter().map(|r| r.results).collect())
+    }
+
+    pub fn query_with_metadata(
+        &self,
+        vec: Vec<f64>,
+        n: usize,
+    ) -> anyhow::Result<Vec<ResultsWithMetadata>> {
+        if vec.len() != self.lsh.dimension {
+            return Err(anyhow::anyhow!(
+                "Query vector dimension mismatch: expected {}, got {}",
+                self.lsh.dimension,
+                vec.len()
+            ));
+        }
+
+        let bucket_keys = self.lsh.get_bucket_keys(&vec)?;
+        let bucket_results: Vec<HashSet<Vector>> = bucket_keys
+            .par_iter()
+            .filter_map(|key| self.buckets.get(key))
+            .collect();
+
+        let mut candidates = HashSet::new();
+        for bucket_entries in bucket_results {
+            candidates.extend(bucket_entries.into_iter());
+        }
+
+        let q_vec = Vector::new(vec);
+        let threshold = self.similarity_threshold;
+
+        let mut top_results: Vec<(u64, Vec<f64>, f64)> = candidates
+            .into_par_iter()
+            .filter_map(|candidate| {
+                if candidate.equal(&q_vec) {
+                    return None;
+                }
+                let similarity = candidate.cosine_similarity(&q_vec).ok()?;
+                if similarity >= threshold {
+                    let h = hash_vector(&candidate);
+                    Some((h, candidate.into(), similarity))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        top_results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        top_results.truncate(n);
+
+        let top_hashes: Vec<u64> = top_results.iter().map(|(h, _, _)| *h).collect();
+        let metadatas = self.buckets.load_metadata(&top_hashes);
+
+        let results: Vec<ResultsWithMetadata> = top_results
+            .into_iter()
+            .zip(metadatas)
+            .map(|((_, results, similarity), metadata)| ResultsWithMetadata {
+                results,
+                metadata,
+                similarity,
+            })
+            .collect();
+
+        Ok(results)
+    }
+
+    pub fn query_dissimilar_with_metadata(
+        &self,
+        vec: Vec<f64>,
+        n: usize,
+    ) -> anyhow::Result<Vec<ResultsWithMetadata>> {
+        if vec.len() != self.lsh.dimension {
+            return Err(anyhow::anyhow!("Vector dimension mismatch"));
+        }
+
+        let original_bucket_keys: HashSet<String> =
+            self.lsh.get_bucket_keys(&vec)?.into_iter().collect();
+
+        let samples = self
+            .buckets
+            .random_sample_excluding_buckets(&original_bucket_keys, n * 10);
+
+        let original = Vector::new(vec);
+
+        let mut results: Vec<ResultsWithMetadata> = samples
+            .into_iter()
+            .filter_map(|entry| {
+                let similarity = entry.vector.cosine_similarity(&original).ok()?;
+                Some(ResultsWithMetadata {
+                    results: entry.vector.into(),
+                    metadata: entry.metadata,
+                    similarity,
+                })
+            })
+            .collect();
+
+        results.sort_by(|a, b| {
+            a.similarity
+                .partial_cmp(&b.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(n);
+
+        Ok(results)
     }
 }
 

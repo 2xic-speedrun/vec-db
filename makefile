@@ -25,3 +25,6 @@ lint-fix:
 
 check:
 	cd vec-db && cargo check --all-targets --profile=test
+
+install:
+	cd vec-db && maturin build --release && pip3 install target/wheels/libvec_db-*.whl --force-reinstall  --break-system-packages

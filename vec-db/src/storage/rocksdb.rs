@@ -1,4 +1,5 @@
-use rocksdb::{Options, WriteBatch, DB};
+use rand::Rng;
+use rocksdb::{BlockBasedOptions, DBCompressionType, Options, WriteBatch, DB};
 
 pub struct RocksDB {
     db: DB,
@@ -11,9 +12,29 @@ impl RocksDB {
         opts.set_write_buffer_size(64 * 1024 * 1024);
         opts.set_disable_auto_compactions(true);
         opts.set_level_zero_file_num_compaction_trigger(1000);
+        opts.set_compression_type(DBCompressionType::None);
+
+        let mut block_opts = BlockBasedOptions::default();
+        block_opts.set_bloom_filter(10.0, false);
+        block_opts.set_cache_index_and_filter_blocks(true);
+        block_opts.set_block_cache(&rocksdb::Cache::new_lru_cache(256 * 1024 * 1024));
+        opts.set_block_based_table_factory(&block_opts);
+        opts.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(32));
 
         let db = DB::open(&opts, path)?;
         Ok(RocksDB { db })
+    }
+
+    pub fn compact(&self) {
+        self.db.compact_range::<&[u8], &[u8]>(None, None);
+    }
+
+    pub fn multi_get(&self, keys: &[impl AsRef<[u8]>]) -> Vec<Option<Vec<u8>>> {
+        self.db
+            .multi_get(keys)
+            .into_iter()
+            .map(|r| r.ok().flatten())
+            .collect()
     }
 
     pub fn put<K, V>(&self, key: K, value: V) -> anyhow::Result<()>
@@ -59,5 +80,20 @@ impl RocksDB {
 
     pub fn delete(&self, key: impl AsRef<[u8]>) -> anyhow::Result<()> {
         self.db.delete(key).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    pub fn sample_keys(&self, prefix: &str, n: usize) -> Vec<String> {
+        let mut rng = rand::rng();
+        self.db
+            .iterator(rocksdb::IteratorMode::From(
+                prefix.as_bytes(),
+                rocksdb::Direction::Forward,
+            ))
+            .filter_map(|r| r.ok())
+            .take_while(|(k, _)| k.starts_with(prefix.as_bytes()))
+            .filter(|_| rng.random::<f32>() < 0.01)
+            .take(n)
+            .map(|(k, _)| String::from_utf8_lossy(&k).to_string())
+            .collect()
     }
 }

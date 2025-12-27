@@ -25,3 +25,11 @@ There are many other algorithms, check the [ann-benchmark](https://ann-benchmark
 - [annoy](https://github.com/spotify/annoy)
 - [DiskANN](https://suhasjs.github.io/files/diskann_neurips19.pdf)
 - [ScaNN](https://research.google/blog/announcing-scann-efficient-vector-similarity-search/)
+
+## Install (Ubuntu)
+
+```bash
+apt install llvm-dev libclang-dev clang
+pip install maturin
+cd vec-db && make install
+```
