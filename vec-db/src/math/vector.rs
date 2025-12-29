@@ -218,7 +218,8 @@ impl<T: VectorElement> Vector<T> {
         self
     }
 
-    pub fn l1_dot(&self, other: &Vector<T>) -> Result<f64> {
+    pub fn l1_dot(&self, other: impl AsRef<[T]>) -> Result<f64> {
+        let other = other.as_ref();
         if self.len() != other.len() {
             bail!(
                 "Vector sizes does not match, {} != {}",
@@ -226,13 +227,13 @@ impl<T: VectorElement> Vector<T> {
                 other.len()
             );
         }
-        Ok(T::dot_product(&self.vector, &other.vector))
+        Ok(T::dot_product(&self.vector, other))
     }
 
     pub fn cosine_similarity(&self, b: &Vector<T>) -> Result<f64> {
         let dot = self.l1_dot(b)?;
-        let norm_a: f64 = T::magnitude_squared(&self.vector).sqrt();
-        let norm_b: f64 = T::magnitude_squared(&b.vector).sqrt();
+        let norm_a = T::magnitude_squared(&self.vector).sqrt();
+        let norm_b = T::magnitude_squared(&b.vector).sqrt();
 
         if norm_a == 0.0 || norm_b == 0.0 {
             Ok(0.0)

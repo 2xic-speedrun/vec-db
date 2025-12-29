@@ -1,9 +1,14 @@
-use crate::math::vector::Vector;
-use std::collections::{HashMap, HashSet};
+use crate::{
+    math::vector::Vector,
+    storage::bucket::{
+        hash_vector, BucketStorage, InMemoryBucket, Metadata, PersistenceMode, ResultsWithMetadata,
+        RocksDbBucket,
+    },
+};
+use std::collections::HashSet;
 
 pub struct MinHash {
     num_hashes: u64,
-    num_bands: u64,
     rows_per_band: u64,
 }
 
@@ -11,174 +16,280 @@ impl MinHash {
     pub fn new(num_hashes: u64, num_bands: u64) -> Self {
         assert!(
             num_hashes % num_bands == 0,
-            "Num hash must be divisible by num_bands",
+            "num_hashes must be divisible by num_bands",
         );
         MinHash {
-            num_bands,
             num_hashes,
             rows_per_band: num_hashes / num_bands,
         }
     }
 
-    // TODO: does this just break the algorithm?
-    fn float64_to_bytes(&self, values: &[f64]) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        for &value in values {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-        bytes
-    }
-
-    fn min_hash(&self, shingles: &HashSet<Vec<u8>>) -> Vec<u32> {
-        if shingles.is_empty() {
+    fn min_hash(&self, elements: &HashSet<u64>) -> Vec<u64> {
+        if elements.is_empty() {
             return vec![0; self.num_hashes as usize];
         }
-        let seeds: Vec<u32> = (0..self.num_hashes)
-            .map(|i| (i as u32).wrapping_mul(2654435761))
-            .collect();
 
-        // TODO: optimize this with a map
-        let mut signature = vec![u32::MAX; self.num_hashes as usize];
-        for shingle in shingles {
-            let mut shingle_bytes = [0u8; 4];
-            let copy_len = std::cmp::min(4, shingle.len());
-            shingle_bytes[..copy_len].copy_from_slice(&shingle[..copy_len]);
-            let shingle_int = u32::from_be_bytes(shingle_bytes);
-
-            for (i, &seed) in seeds.iter().enumerate() {
-                let hash_val = (shingle_int ^ seed).wrapping_mul(2654435761);
-                signature[i] = std::cmp::min(signature[i], hash_val);
+        let mut signature = vec![u64::MAX; self.num_hashes as usize];
+        for &element in elements {
+            for (i, sig) in signature.iter_mut().enumerate() {
+                let seed = (i as u64).wrapping_mul(0x517cc1b727220a95);
+                let hash_val = element.wrapping_add(seed).wrapping_mul(0x9e3779b97f4a7c15);
+                *sig = hash_val.min(*sig);
             }
         }
 
         signature
-            .into_iter()
-            .map(|s| if s == u32::MAX { 0 } else { s })
+    }
+
+    fn signature(&self, elements: &HashSet<u64>) -> Vec<u64> {
+        self.min_hash(elements)
+    }
+
+    fn get_bucket_keys(&self, elements: &HashSet<u64>) -> Vec<String> {
+        use std::fmt::Write;
+        let signature = self.signature(elements);
+
+        signature
+            .chunks(self.rows_per_band as usize)
+            .enumerate()
+            .map(|(band, chunk)| {
+                let mut key = String::with_capacity(8 + chunk.len() * 17);
+                write!(key, "m{band}_").expect("write to String cannot fail");
+                for &val in chunk {
+                    write!(key, "{val:016x}").expect("write to String cannot fail");
+                }
+                key
+            })
             .collect()
     }
 
-    fn get_byte_shingles(&self, data: &[u8], shingle_size: usize) -> HashSet<Vec<u8>> {
-        let mut set = HashSet::new();
-        if data.len() < shingle_size {
-            set.insert(data.to_vec());
-            return set;
-        }
-
-        let step = std::cmp::max(1, shingle_size / 4);
-
-        for i in (0..=data.len().saturating_sub(shingle_size)).step_by(step) {
-            set.insert(data[i..i + shingle_size].to_vec());
-        }
-
-        set
-    }
-
-    fn signature(&self, entry: &[f64]) -> Vec<u32> {
-        let bytes = self.float64_to_bytes(entry);
-        let shingles = self.get_byte_shingles(&bytes, 8);
-        self.min_hash(&shingles)
-    }
-
-    fn get_bucket_key(&self, entry: Vec<f64>) -> Vec<String> {
-        let signature = self.signature(&entry);
-
-        let mut buckets = vec![String::new(); self.num_bands as usize];
-        for band in 0..self.num_bands {
-            let start_idx = (band as usize) * (self.rows_per_band as usize);
-            let end_idx = start_idx + (self.rows_per_band as usize);
-            let band_signature = signature[start_idx..end_idx].to_vec();
-            let bucket_key = format!("{band}_{band_signature:?}");
-            buckets[band as usize] = bucket_key;
-        }
-        buckets
-    }
-
-    fn jaccard_similarity(&self, sig1: &[u32], sig2: &[u32]) -> f64 {
+    fn jaccard_similarity(&self, sig1: &[u64], sig2: &[u64]) -> f64 {
         let matches = sig1.iter().zip(sig2.iter()).filter(|(a, b)| a == b).count();
         matches as f64 / sig1.len() as f64
     }
 }
 
-pub struct Results {
+fn vec_to_set(vec: &[f64]) -> HashSet<u64> {
+    vec.iter().map(|&x| x as u64).collect()
+}
+
+struct Results {
     results: Vec<f64>,
     similarity: f64,
 }
 
-pub struct MinHashDb {
+pub struct MinHashDb<T = InMemoryBucket> {
     min_hash: MinHash,
     similarity_threshold: f64,
-
-    buckets: HashMap<String, HashSet<Vector>>,
+    buckets: T,
 }
 
-impl MinHashDb {
+impl MinHashDb<RocksDbBucket> {
+    pub fn persistent(
+        num_hashes: u64,
+        num_bands: u64,
+        similarity_threshold: f64,
+        db_path: String,
+    ) -> Self {
+        Self::new_with_persistence(
+            num_hashes,
+            num_bands,
+            similarity_threshold,
+            PersistenceMode::Persistent(db_path),
+        )
+    }
+
+    pub fn compact(&self) {
+        self.buckets.compact();
+    }
+}
+
+impl<T: BucketStorage> MinHashDb<T> {
     pub fn new(num_hashes: u64, num_bands: u64, similarity_threshold: f64) -> Self {
         MinHashDb {
             min_hash: MinHash::new(num_hashes, num_bands),
-            buckets: HashMap::new(),
+            buckets: T::new(),
             similarity_threshold,
         }
     }
 
-    pub fn insert(&mut self, vec: Vec<f64>) -> anyhow::Result<()> {
-        for bucket_key in self.min_hash.get_bucket_key(vec.clone()) {
-            let entry = self.buckets.entry(bucket_key);
-            entry.or_default().insert(Vector::new(vec.clone()));
+    pub fn new_with_persistence(
+        num_hashes: u64,
+        num_bands: u64,
+        similarity_threshold: f64,
+        persistence_mode: PersistenceMode,
+    ) -> Self {
+        MinHashDb {
+            min_hash: MinHash::new(num_hashes, num_bands),
+            buckets: T::new_with_persistence(persistence_mode),
+            similarity_threshold,
         }
+    }
+
+    pub fn insert(&mut self, elements: Vec<f64>) -> anyhow::Result<()> {
+        let set = vec_to_set(&elements);
+        let bucket_keys = self.min_hash.get_bucket_keys(&set);
+        let bucket_refs: Vec<&str> = bucket_keys.iter().map(|s| s.as_str()).collect();
+        self.buckets.insert(&bucket_refs, Vector::new(elements))?;
         Ok(())
     }
 
-    pub fn query(&self, vec: Vec<f64>, n: usize) -> anyhow::Result<Vec<Vec<f64>>> {
+    pub fn insert_with_metadata(
+        &mut self,
+        elements: Vec<f64>,
+        metadata: Metadata,
+    ) -> anyhow::Result<()> {
+        let set = vec_to_set(&elements);
+        let bucket_keys = self.min_hash.get_bucket_keys(&set);
+        let bucket_refs: Vec<&str> = bucket_keys.iter().map(|s| s.as_str()).collect();
+        self.buckets
+            .insert_with_metadata(&bucket_refs, Vector::new(elements), metadata)?;
+        Ok(())
+    }
+
+    pub fn query(&self, elements: Vec<f64>, n: usize) -> anyhow::Result<Vec<Vec<f64>>> {
+        let query_set = vec_to_set(&elements);
         let mut candidates = HashSet::new();
-        for bucket_key in self.min_hash.get_bucket_key(vec.clone()) {
+        for bucket_key in self.min_hash.get_bucket_keys(&query_set) {
             if let Some(bucket_entries) = self.buckets.get(&bucket_key) {
-                candidates.extend(bucket_entries.iter().cloned());
+                candidates.extend(bucket_entries.into_iter());
             }
         }
 
         let mut results = Vec::new();
-        let query_signature = self.min_hash.signature(&vec);
-        let query = Vector::new(vec);
-        for candidate_id in candidates {
-            if candidate_id.equal(&query) {
+        let query_signature = self.min_hash.signature(&query_set);
+        let query = Vector::new(elements);
+        for candidate in candidates {
+            if candidate.equal(&query) {
                 continue;
             }
-            let vec: Vec<f64> = candidate_id.clone().into();
-            let candidate_signature = self.min_hash.signature(&vec);
+            let vec_data: Vec<f64> = candidate.into();
+            let candidate_set = vec_to_set(&vec_data);
+            let candidate_signature = self.min_hash.signature(&candidate_set);
             let similarity = self
                 .min_hash
                 .jaccard_similarity(&query_signature, &candidate_signature);
 
             if similarity >= self.similarity_threshold {
                 results.push(Results {
-                    results: vec,
+                    results: vec_data,
                     similarity,
                 });
             }
         }
 
-        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        results.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(n);
 
-        Ok(results.iter().map(|f| f.results.clone()).collect())
+        Ok(results.into_iter().map(|f| f.results).collect())
+    }
+
+    pub fn query_with_metadata(
+        &self,
+        vec: Vec<f64>,
+        n: usize,
+    ) -> anyhow::Result<Vec<ResultsWithMetadata>> {
+        let query_set = vec_to_set(&vec);
+        let mut candidates = HashSet::new();
+        for bucket_key in self.min_hash.get_bucket_keys(&query_set) {
+            if let Some(bucket_entries) = self.buckets.get(&bucket_key) {
+                candidates.extend(bucket_entries.into_iter());
+            }
+        }
+
+        let query_signature = self.min_hash.signature(&query_set);
+        let query = Vector::new(vec);
+        let mut results = Vec::new();
+
+        for candidate in candidates {
+            if candidate.equal(&query) {
+                continue;
+            }
+            let hash = hash_vector(&candidate);
+            let vec_data: Vec<f64> = candidate.into();
+            let candidate_set = vec_to_set(&vec_data);
+            let candidate_signature = self.min_hash.signature(&candidate_set);
+            let similarity = self
+                .min_hash
+                .jaccard_similarity(&query_signature, &candidate_signature);
+
+            if similarity >= self.similarity_threshold {
+                let metadata = self.buckets.load_metadata(&[hash]);
+                results.push(ResultsWithMetadata {
+                    results: vec_data,
+                    metadata: metadata.into_iter().next().unwrap_or_default(),
+                    similarity,
+                });
+            }
+        }
+
+        results.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(n);
+
+        Ok(results)
+    }
+
+    pub fn query_dissimilar_with_metadata(
+        &self,
+        vec: Vec<f64>,
+        n: usize,
+    ) -> anyhow::Result<Vec<ResultsWithMetadata>> {
+        let query_set = vec_to_set(&vec);
+        let original_bucket_keys: HashSet<String> = self
+            .min_hash
+            .get_bucket_keys(&query_set)
+            .into_iter()
+            .collect();
+
+        let samples = self
+            .buckets
+            .random_sample_excluding_buckets(&original_bucket_keys, n * 10);
+
+        let query_signature = self.min_hash.signature(&query_set);
+
+        let mut results: Vec<ResultsWithMetadata> = samples
+            .into_iter()
+            .map(|entry| {
+                let vec_data: Vec<f64> = entry.vector.into();
+                let candidate_set = vec_to_set(&vec_data);
+                let candidate_signature = self.min_hash.signature(&candidate_set);
+                let similarity = self
+                    .min_hash
+                    .jaccard_similarity(&query_signature, &candidate_signature);
+                ResultsWithMetadata {
+                    results: vec_data,
+                    metadata: entry.metadata,
+                    similarity,
+                }
+            })
+            .collect();
+
+        results.sort_by(|a, b| {
+            a.similarity
+                .partial_cmp(&b.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(n);
+
+        Ok(results)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use crate::{
-        backends::min_hash::{MinHash, MinHashDb},
-        math::vector::Vector,
-    };
+    use crate::backends::min_hash::MinHashDb;
+    use crate::math::vector::Vector;
 
     fn create_test_db() -> MinHashDb {
-        MinHashDb {
-            min_hash: MinHash::new(64, 16),
-            similarity_threshold: 0.6,
-            buckets: HashMap::new(),
-        }
+        MinHashDb::new(64, 16, 0.6)
     }
 
     #[test]

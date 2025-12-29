@@ -117,6 +117,34 @@ def test_metadata():
             assert "name" in metadata
 
 
+def test_minhash_rocksdb():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        db_path = os.path.join(temp_dir, "minhash_db")
+
+        contract1 = [1.0, 2.0, 3.0, 4.0, 5.0]
+        contract2 = [1.1, 2.1, 3.0, 4.0, 5.0]
+        contract3 = [10.0, 20.0, 30.0, 40.0, 50.0]
+
+        db = PyDatabase.with_persistent_min_hash_rocksdb(
+            num_hashes=64,
+            num_bands=16,
+            similarity_threshold=0.5,
+            db_path=db_path,
+        )
+
+        db.insert_with_metadata(contract1, {"name": "Contract1"})
+        db.insert_with_metadata(contract2, {"name": "Contract2"})
+        db.insert_with_metadata(contract3, {"name": "Contract3"})
+
+        results = db.query_with_metadata(contract1, 5)
+        print(f"MinHash results: {len(results)}")
+        for vec, metadata, similarity in results:
+            print(f"  {metadata.get('name')} (sim: {similarity:.4f})")
+
+        assert len(results) >= 1, f"Should find at least one similar contract, got {len(results)}"
+
+
 if __name__ == "__main__":
     test_persistent_rocksdb()
     test_metadata()
+    test_minhash_rocksdb()

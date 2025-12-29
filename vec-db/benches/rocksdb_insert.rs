@@ -65,24 +65,36 @@ fn bench_query_big_db(c: &mut Criterion) {
         // Create clustered data: base pattern + small perturbation
         // This simulates EVM bytecode where many contracts share similar byte frequencies
         let cluster = i % 50; // 50 clusters
-        let mut freq: Vec<f64> = (0..256).map(|j| {
-            let base = ((cluster * 7 + j * 3) % 50) as f64;
-            let perturb = (i as f64 * 0.001).sin() * 0.1;
-            base + perturb
-        }).collect();
+        let mut freq: Vec<f64> = (0..256)
+            .map(|j| {
+                let base = ((cluster * 7 + j * 3) % 50) as f64;
+                let perturb = (i as f64 * 0.001).sin() * 0.1;
+                base + perturb
+            })
+            .collect();
         let total: f64 = freq.iter().sum();
-        if total > 0.0 { for f in &mut freq { *f /= total; } }
+        if total > 0.0 {
+            for f in &mut freq {
+                *f /= total;
+            }
+        }
         let mean = freq.iter().sum::<f64>() / 256.0;
         let vec: Vec<f64> = freq.iter().map(|f| f - mean).collect();
         let mut m = BTreeMap::new();
-        m.insert("n".into(), format!("{}", i));
+        m.insert("n".into(), format!("{i}"));
         db.insert_with_metadata(vec, m).unwrap();
     }
     let q: Vec<f64> = {
         let cluster = 25;
-        let mut freq: Vec<f64> = (0..256).map(|j| ((cluster * 7 + j * 3) % 50) as f64).collect();
+        let mut freq: Vec<f64> = (0..256)
+            .map(|j| ((cluster * 7 + j * 3) % 50) as f64)
+            .collect();
         let total: f64 = freq.iter().sum();
-        if total > 0.0 { for f in &mut freq { *f /= total; } }
+        if total > 0.0 {
+            for f in &mut freq {
+                *f /= total;
+            }
+        }
         let mean = freq.iter().sum::<f64>() / 256.0;
         freq.iter().map(|f| f - mean).collect()
     };
