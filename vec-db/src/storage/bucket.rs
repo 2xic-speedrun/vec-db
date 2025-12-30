@@ -30,6 +30,7 @@ impl From<ResultsWithMetadata> for (Vec<f64>, HashMap<String, String>, f64) {
 pub enum PersistenceMode {
     Temporary,
     Persistent(String),
+    ReadOnly(String),
 }
 
 pub fn hash_vector(vector: &Vector) -> u64 {
@@ -54,7 +55,9 @@ fn deserialize_metadata(bytes: Option<Vec<u8>>) -> Metadata {
 
 pub trait BucketStorage: Send + Sync {
     fn new() -> Self;
-    fn new_with_persistence(mode: PersistenceMode) -> Self;
+    fn new_with_persistence(mode: PersistenceMode) -> anyhow::Result<Self>
+    where
+        Self: Sized;
     fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()>;
     fn insert_with_metadata(
         &mut self,
@@ -86,8 +89,8 @@ impl BucketStorage for InMemoryBucket {
         Self::default()
     }
 
-    fn new_with_persistence(_mode: PersistenceMode) -> Self {
-        Self::new()
+    fn new_with_persistence(_mode: PersistenceMode) -> anyhow::Result<Self> {
+        Ok(Self::new())
     }
 
     fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()> {
@@ -239,25 +242,37 @@ impl RocksDbBucket {
 
 impl BucketStorage for RocksDbBucket {
     fn new() -> Self {
-        Self::new_with_persistence(PersistenceMode::Temporary)
+        Self::new_with_persistence(PersistenceMode::Temporary).expect("Failed to create temp DB")
     }
 
-    fn new_with_persistence(mode: PersistenceMode) -> Self {
-        let (db_path, persistence_mode) = match mode {
+    fn new_with_persistence(mode: PersistenceMode) -> anyhow::Result<Self> {
+        let (db_path, persistence_mode, read_only) = match mode {
             PersistenceMode::Temporary => (
                 format!("/tmp/bucket_db_{}", std::process::id()),
                 PersistenceMode::Temporary,
+                false,
             ),
-            PersistenceMode::Persistent(ref path) => {
-                (path.clone(), PersistenceMode::Persistent(path.clone()))
+            PersistenceMode::Persistent(ref path) => (
+                path.clone(),
+                PersistenceMode::Persistent(path.clone()),
+                false,
+            ),
+            PersistenceMode::ReadOnly(ref path) => {
+                (path.clone(), PersistenceMode::ReadOnly(path.clone()), true)
             }
         };
 
-        Self {
-            storage: RocksDB::new(&db_path).expect("Failed to create RocksDB instance"),
+        let storage = if read_only {
+            RocksDB::open_read_only(&db_path)?
+        } else {
+            RocksDB::new(&db_path)?
+        };
+
+        Ok(Self {
+            storage,
             db_path,
             persistence_mode,
-        }
+        })
     }
 
     fn insert(&mut self, keys: &[&str], value: Vector) -> anyhow::Result<()> {

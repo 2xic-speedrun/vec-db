@@ -45,14 +45,16 @@ impl PyDatabase {
         num_bands: u64,
         similarity_threshold: f64,
         db_path: String,
+        readonly: Option<bool>,
     ) -> PyResult<Self> {
+        let db = if readonly.unwrap_or(false) {
+            MinHashDb::read_only(num_hashes, num_bands, similarity_threshold, db_path)
+        } else {
+            MinHashDb::persistent(num_hashes, num_bands, similarity_threshold, db_path)
+        }
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
-            database: Backends::MinHashRocksDB(MinHashDb::persistent(
-                num_hashes,
-                num_bands,
-                similarity_threshold,
-                db_path,
-            )),
+            database: Backends::MinHashRocksDB(db),
         })
     }
 
@@ -94,14 +96,25 @@ impl PyDatabase {
         vector_size: usize,
         similarity_threshold: f64,
         db_path: String,
+        readonly: Option<bool>,
     ) -> PyResult<Self> {
-        let lsh_db = LshDB::<RocksDbBucket>::persistent(
-            num_hashes,
-            num_bands,
-            vector_size,
-            similarity_threshold,
-            db_path,
-        )
+        let lsh_db = if readonly.unwrap_or(false) {
+            LshDB::<RocksDbBucket>::read_only(
+                num_hashes,
+                num_bands,
+                vector_size,
+                similarity_threshold,
+                db_path,
+            )
+        } else {
+            LshDB::<RocksDbBucket>::persistent(
+                num_hashes,
+                num_bands,
+                vector_size,
+                similarity_threshold,
+                db_path,
+            )
+        }
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
             database: Backends::LSHRocksDB(lsh_db),

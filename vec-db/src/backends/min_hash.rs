@@ -90,12 +90,26 @@ impl MinHashDb<RocksDbBucket> {
         num_bands: u64,
         similarity_threshold: f64,
         db_path: String,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         Self::new_with_persistence(
             num_hashes,
             num_bands,
             similarity_threshold,
             PersistenceMode::Persistent(db_path),
+        )
+    }
+
+    pub fn read_only(
+        num_hashes: u64,
+        num_bands: u64,
+        similarity_threshold: f64,
+        db_path: String,
+    ) -> anyhow::Result<Self> {
+        Self::new_with_persistence(
+            num_hashes,
+            num_bands,
+            similarity_threshold,
+            PersistenceMode::ReadOnly(db_path),
         )
     }
 
@@ -118,12 +132,12 @@ impl<T: BucketStorage> MinHashDb<T> {
         num_bands: u64,
         similarity_threshold: f64,
         persistence_mode: PersistenceMode,
-    ) -> Self {
-        MinHashDb {
+    ) -> anyhow::Result<Self> {
+        Ok(MinHashDb {
             min_hash: MinHash::new(num_hashes, num_bands),
-            buckets: T::new_with_persistence(persistence_mode),
+            buckets: T::new_with_persistence(persistence_mode)?,
             similarity_threshold,
-        }
+        })
     }
 
     pub fn insert(&mut self, elements: Vec<f64>) -> anyhow::Result<()> {

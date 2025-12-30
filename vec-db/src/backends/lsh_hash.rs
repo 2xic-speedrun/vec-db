@@ -113,6 +113,22 @@ impl LshDB<RocksDbBucket> {
         )
     }
 
+    pub fn read_only(
+        num_hashes: usize,
+        num_bands: usize,
+        dimension: usize,
+        similarity_threshold: f64,
+        db_path: String,
+    ) -> anyhow::Result<Self> {
+        Self::new_with_persistence(
+            num_hashes,
+            num_bands,
+            dimension,
+            similarity_threshold,
+            PersistenceMode::ReadOnly(db_path),
+        )
+    }
+
     pub fn compact(&self) {
         self.buckets.compact();
     }
@@ -142,7 +158,7 @@ impl<T: BucketStorage> LshDB<T> {
         Ok(LshDB {
             lsh: VectorLSH::new(num_hashes, num_bands, dimension)?,
             similarity_threshold,
-            buckets: T::new_with_persistence(persistence_mode),
+            buckets: T::new_with_persistence(persistence_mode)?,
         })
     }
 

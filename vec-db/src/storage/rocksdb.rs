@@ -6,7 +6,7 @@ pub struct RocksDB {
 }
 
 impl RocksDB {
-    pub fn new(path: &str) -> anyhow::Result<Self> {
+    fn default_opts() -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_write_buffer_size(64 * 1024 * 1024);
@@ -20,8 +20,20 @@ impl RocksDB {
         block_opts.set_block_cache(&rocksdb::Cache::new_lru_cache(256 * 1024 * 1024));
         opts.set_block_based_table_factory(&block_opts);
         opts.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(32));
+        opts
+    }
 
+    pub fn new(path: &str) -> anyhow::Result<Self> {
+        let opts = Self::default_opts();
         let db = DB::open(&opts, path)?;
+        Ok(RocksDB { db })
+    }
+
+    pub fn open_read_only(path: &str) -> anyhow::Result<Self> {
+        let opts = Self::default_opts();
+        let db = DB::open_for_read_only(&opts, path, true).map_err(|e| {
+            anyhow::anyhow!("{e}. Run compact() on writable DB first to flush WAL.")
+        })?;
         Ok(RocksDB { db })
     }
 
