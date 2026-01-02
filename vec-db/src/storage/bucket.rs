@@ -20,9 +20,13 @@ pub struct ResultsWithMetadata {
     pub similarity: f64,
 }
 
-impl From<ResultsWithMetadata> for (Vec<f64>, HashMap<String, String>, f64) {
+impl From<ResultsWithMetadata> for (Vec<f64>, Option<HashMap<String, String>>, f64) {
     fn from(r: ResultsWithMetadata) -> Self {
-        (r.results, r.metadata.into_iter().collect(), r.similarity)
+        (
+            r.results,
+            Some(r.metadata.into_iter().collect()),
+            r.similarity,
+        )
     }
 }
 

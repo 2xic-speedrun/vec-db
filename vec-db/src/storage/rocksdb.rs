@@ -9,15 +9,17 @@ impl RocksDB {
     fn default_opts() -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
-        opts.set_write_buffer_size(64 * 1024 * 1024);
+        opts.set_write_buffer_size(128 * 1024 * 1024);
         opts.set_disable_auto_compactions(true);
         opts.set_level_zero_file_num_compaction_trigger(1000);
         opts.set_compression_type(DBCompressionType::None);
+        opts.set_max_open_files(512);
+        opts.set_row_cache(&rocksdb::Cache::new_lru_cache(512 * 1024 * 1024));
 
         let mut block_opts = BlockBasedOptions::default();
         block_opts.set_bloom_filter(10.0, false);
         block_opts.set_cache_index_and_filter_blocks(true);
-        block_opts.set_block_cache(&rocksdb::Cache::new_lru_cache(256 * 1024 * 1024));
+        block_opts.set_block_cache(&rocksdb::Cache::new_lru_cache(512 * 1024 * 1024));
         opts.set_block_based_table_factory(&block_opts);
         opts.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(32));
         opts

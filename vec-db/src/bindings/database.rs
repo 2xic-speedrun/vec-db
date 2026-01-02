@@ -5,12 +5,21 @@ use crate::{
 };
 use pyo3::{prelude::*, types::PyType};
 use std::collections::HashMap;
+use std::sync::Arc;
 
-type QueryResultWithMetadata = (Vec<f64>, HashMap<String, String>, f64);
+type QueryResultWithMetadata = (Vec<f64>, Option<HashMap<String, String>>, f64);
+type IteryResultWithMetadata = (Vec<f64>, Option<HashMap<String, String>>);
 
 #[pyclass]
 pub struct PyDatabase {
-    database: Backends,
+    database: Arc<Backends>,
+}
+
+#[pyclass]
+pub struct PyDatabaseIterator {
+    database: Arc<Backends>,
+    index: usize,
+    count: usize,
 }
 
 #[pymethods]
@@ -18,7 +27,7 @@ impl PyDatabase {
     #[classmethod]
     fn with_kmeans_backend(_cls: &PyType, vector_size: usize) -> PyResult<Self> {
         Ok(PyDatabase {
-            database: Backends::Kmenas(KmeansDb::new(vector_size)),
+            database: Arc::new(Backends::Kmenas(KmeansDb::new(vector_size))),
         })
     }
 
@@ -30,11 +39,11 @@ impl PyDatabase {
         similarity_threshold: f64,
     ) -> PyResult<Self> {
         Ok(PyDatabase {
-            database: Backends::MinHash(MinHashDb::new(
+            database: Arc::new(Backends::MinHash(MinHashDb::new(
                 num_hashes,
                 num_bands,
                 similarity_threshold,
-            )),
+            ))),
         })
     }
 
@@ -54,7 +63,7 @@ impl PyDatabase {
         }
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
-            database: Backends::MinHashRocksDB(db),
+            database: Arc::new(Backends::MinHashRocksDB(db)),
         })
     }
 
@@ -69,7 +78,7 @@ impl PyDatabase {
         let lsh_db = LshDB::new(num_hashes, num_bands, vector_size, similarity_threshold)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
-            database: Backends::LSH(lsh_db),
+            database: Arc::new(Backends::LSH(lsh_db)),
         })
     }
 
@@ -84,7 +93,7 @@ impl PyDatabase {
         let lsh_db = LshDB::new(num_hashes, num_bands, vector_size, similarity_threshold)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
-            database: Backends::LSHRocksDB(lsh_db),
+            database: Arc::new(Backends::LSHRocksDB(lsh_db)),
         })
     }
 
@@ -117,24 +126,47 @@ impl PyDatabase {
         }
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         Ok(PyDatabase {
-            database: Backends::LSHRocksDB(lsh_db),
+            database: Arc::new(Backends::LSHRocksDB(lsh_db)),
         })
     }
 
     #[classmethod]
     fn with_hnsw(_cls: &PyType, similarity_threshold: f64) -> PyResult<Self> {
         Ok(PyDatabase {
-            database: Backends::HNSW(HnswDB::new(256, similarity_threshold)),
+            database: Arc::new(Backends::HNSW(HnswDB::new(256, similarity_threshold))),
+        })
+    }
+
+    #[classmethod]
+    fn with_persistent_hnsw_rocksdb(
+        _cls: &PyType,
+        max_connections: usize,
+        similarity_threshold: f64,
+        db_path: String,
+        readonly: Option<bool>,
+    ) -> PyResult<Self> {
+        let db = if readonly.unwrap_or(false) {
+            HnswDB::read_only(max_connections, similarity_threshold, db_path)
+        } else {
+            HnswDB::persistent(max_connections, similarity_threshold, db_path)
+        }
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        Ok(PyDatabase {
+            database: Arc::new(Backends::HNSWRocksDB(db)),
         })
     }
 
     fn insert(&mut self, vec: Vec<f64>) -> PyResult<()> {
-        let results = match &mut self.database {
+        let db = Arc::get_mut(&mut self.database).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Cannot insert while iterating")
+        })?;
+        let results = match db {
             Backends::Kmenas(backend) => backend.insert(Vector::new(vec)),
             Backends::MinHash(backend) => backend.insert(vec),
             Backends::MinHashRocksDB(backend) => backend.insert(vec),
             Backends::LSH(lsh_db) => lsh_db.insert(vec),
             Backends::HNSW(hnsw_db) => hnsw_db.insert(Vector::new(vec)),
+            Backends::HNSWRocksDB(hnsw_db) => hnsw_db.insert(Vector::new(vec)),
             Backends::LSHRocksDB(lsh_db) => lsh_db.insert(vec),
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
@@ -146,27 +178,32 @@ impl PyDatabase {
         metadata: HashMap<String, String>,
     ) -> PyResult<()> {
         let metadata: Metadata = metadata.into_iter().collect();
-        let results = match &mut self.database {
+        let db = Arc::get_mut(&mut self.database).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Cannot insert while iterating")
+        })?;
+        let results = match db {
             Backends::LSH(lsh_db) => lsh_db.insert_with_metadata(vec, metadata),
             Backends::LSHRocksDB(lsh_db) => lsh_db.insert_with_metadata(vec, metadata),
             Backends::MinHash(db) => db.insert_with_metadata(vec, metadata),
             Backends::MinHashRocksDB(db) => db.insert_with_metadata(vec, metadata),
+            Backends::HNSWRocksDB(db) => db.insert_with_metadata(Vector::new(vec), metadata),
             _ => {
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    "insert_with_metadata only supported for LSH/MinHash backends",
+                    "insert_with_metadata only supported for LSH/MinHash/HNSW RocksDB backends",
                 ))
             }
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
-    fn query(&mut self, vec: Vec<f64>, n: usize) -> PyResult<Vec<Vec<f64>>> {
-        let results = match &mut self.database {
+    fn query(&self, vec: Vec<f64>, n: usize) -> PyResult<Vec<Vec<f64>>> {
+        let results = match self.database.as_ref() {
             Backends::Kmenas(backend) => backend.query(Vector::new(vec), n),
             Backends::MinHash(backend) => backend.query(vec, n),
             Backends::MinHashRocksDB(backend) => backend.query(vec, n),
             Backends::LSH(lsh_db) => lsh_db.query(vec, n),
             Backends::HNSW(hnsw_db) => hnsw_db.query(Vector::new(vec), n),
+            Backends::HNSWRocksDB(hnsw_db) => hnsw_db.query(Vector::new(vec), n),
             Backends::LSHRocksDB(lsh_db) => lsh_db.query(vec, n),
         };
         results.map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
@@ -177,29 +214,44 @@ impl PyDatabase {
         vec: Vec<f64>,
         n: usize,
     ) -> PyResult<Vec<QueryResultWithMetadata>> {
-        let results = match &self.database {
-            Backends::LSH(lsh_db) => lsh_db.query_with_metadata(vec, n),
-            Backends::LSHRocksDB(lsh_db) => lsh_db.query_with_metadata(vec, n),
-            Backends::MinHash(db) => db.query_with_metadata(vec, n),
-            Backends::MinHashRocksDB(db) => db.query_with_metadata(vec, n),
-            _ => {
-                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    "query_with_metadata only supported for LSH/MinHash backends",
-                ))
-            }
-        };
-        results
-            .map(|r| r.into_iter().map(Into::into).collect())
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+        match self.database.as_ref() {
+            Backends::LSH(lsh_db) => lsh_db
+                .query_with_metadata(vec, n)
+                .map(|r| r.into_iter().map(Into::into).collect())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())),
+            Backends::LSHRocksDB(lsh_db) => lsh_db
+                .query_with_metadata(vec, n)
+                .map(|r| r.into_iter().map(Into::into).collect())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())),
+            Backends::MinHash(db) => db
+                .query_with_metadata(vec, n)
+                .map(|r| r.into_iter().map(Into::into).collect())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())),
+            Backends::MinHashRocksDB(db) => db
+                .query_with_metadata(vec, n)
+                .map(|r| r.into_iter().map(Into::into).collect())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())),
+            Backends::HNSWRocksDB(db) => db
+                .query_with_metadata(Vector::new(vec), n)
+                .map(|r| r.into_iter().map(Into::into).collect())
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())),
+            _ => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "query_with_metadata only supported for LSH/MinHash/HNSW RocksDB backends",
+            )),
+        }
     }
 
     fn compact(&self) -> PyResult<()> {
-        match &self.database {
+        match self.database.as_ref() {
             Backends::LSHRocksDB(lsh_db) => {
                 lsh_db.compact();
                 Ok(())
             }
             Backends::MinHashRocksDB(db) => {
+                db.compact();
+                Ok(())
+            }
+            Backends::HNSWRocksDB(db) => {
                 db.compact();
                 Ok(())
             }
@@ -214,7 +266,7 @@ impl PyDatabase {
         vec: Vec<f64>,
         n: usize,
     ) -> PyResult<Vec<QueryResultWithMetadata>> {
-        let results = match &self.database {
+        let results = match self.database.as_ref() {
             Backends::LSH(lsh_db) => lsh_db.query_dissimilar_with_metadata(vec, n),
             Backends::LSHRocksDB(lsh_db) => lsh_db.query_dissimilar_with_metadata(vec, n),
             Backends::MinHash(mh_db) => mh_db.query_dissimilar_with_metadata(vec, n),
@@ -228,5 +280,45 @@ impl PyDatabase {
         results
             .map(|r| r.into_iter().map(Into::into).collect())
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyResult<PyDatabaseIterator> {
+        let count = match slf.database.as_ref() {
+            Backends::HNSWRocksDB(db) => db.len(),
+            Backends::HNSW(db) => db.len(),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "iter only supported for HNSW backends",
+                ))
+            }
+        };
+        Ok(PyDatabaseIterator {
+            database: Arc::clone(&slf.database),
+            index: 0,
+            count,
+        })
+    }
+}
+
+#[pymethods]
+impl PyDatabaseIterator {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self) -> Option<IteryResultWithMetadata> {
+        while self.index < self.count {
+            let idx = self.index;
+            self.index += 1;
+            let result = match self.database.as_ref() {
+                Backends::HNSWRocksDB(db) => db.get(idx),
+                Backends::HNSW(db) => db.get(idx),
+                _ => None,
+            };
+            if let Some((vec, metadata)) = result {
+                return Some((vec, metadata.map(|m| m.into_iter().collect())));
+            }
+        }
+        None
     }
 }

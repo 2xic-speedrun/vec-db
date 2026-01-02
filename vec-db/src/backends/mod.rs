@@ -1,5 +1,10 @@
 use crate::{
-    backends::{hnsw::HnswDB, kmeans::KmeansDb, lsh_hash::LshDB, min_hash::MinHashDb},
+    backends::{
+        hnsw::{HnswDB, InMemoryHnswStorage, RocksDbHnswStorage},
+        kmeans::KmeansDb,
+        lsh_hash::LshDB,
+        min_hash::MinHashDb,
+    },
     storage::bucket::{InMemoryBucket, RocksDbBucket},
 };
 
@@ -14,5 +19,6 @@ pub enum Backends {
     MinHashRocksDB(MinHashDb<RocksDbBucket>),
     LSH(LshDB<InMemoryBucket>),
     LSHRocksDB(LshDB<RocksDbBucket>),
-    HNSW(HnswDB),
+    HNSW(HnswDB<InMemoryHnswStorage>),
+    HNSWRocksDB(HnswDB<RocksDbHnswStorage>),
 }

@@ -323,7 +323,7 @@ impl KmeansDb {
         Ok(())
     }
 
-    pub fn query(&mut self, vector: Vector, n: usize) -> anyhow::Result<Vec<Vec<f64>>> {
+    pub fn query(&self, vector: Vector, n: usize) -> anyhow::Result<Vec<Vec<f64>>> {
         // 1. Find the closest centroid.
         // 2. Find the closest vector inside that group ?
         // ^ this might be good enough for v0.
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     pub fn test_empty_query() -> anyhow::Result<()> {
-        let mut db = KmeansDb::new(100);
+        let db = KmeansDb::new(100);
         let results = db.query(Vector::empty(100), 5)?;
         assert_eq!(results.len(), 0);
         Ok(())
